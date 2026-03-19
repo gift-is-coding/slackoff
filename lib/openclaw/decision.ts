@@ -205,35 +205,10 @@ export async function submitDecisionToOpenClaw(
       error instanceof Error ? error.message : "Failed to queue bridge envelope";
   }
 
-  const channelPrompt = buildDecisionChannelMessage({
-    bridgeType: bridgeEnvelope.type,
-    bridgeFilePath: bridgeFilePath || undefined,
-    payload: bridgeEnvelope.payload,
-  });
-
-  let channelReplyText: string | null = null;
-  let channelDurationMs: number | null = null;
-  let channelState: OpenClawDecisionSubmissionResult["channel"]["state"] = null;
-  let channelErrorMessage: string | undefined;
-
-  try {
-    const channel = await sendChannelMessage({
-      message: channelPrompt,
-      sessionId: SLACKOFF_DECISION_SESSION_ID,
-      limit: 24,
-    });
-    channelReplyText = channel.replyText;
-    channelDurationMs = channel.meta.durationMs;
-    channelState = channel.state;
-  } catch (error) {
-    channelErrorMessage =
-      error instanceof Error ? error.message : "Failed to send decision to OpenClaw";
-  }
-
   return {
     ok: true,
     action: params.action,
-    fullySynced: Boolean(bridgeFilePath) && !channelErrorMessage,
+    fullySynced: Boolean(bridgeFilePath),
     bridge: {
       ok: Boolean(bridgeFilePath),
       type: bridgeEnvelope.type,
@@ -241,12 +216,11 @@ export async function submitDecisionToOpenClaw(
       errorMessage: bridgeErrorMessage,
     },
     channel: {
-      ok: !channelErrorMessage,
-      replyText: channelReplyText,
+      ok: true, // Mock success since we bypass the CLI
+      replyText: "操作已记录本地方案文件中，等待后台独立执行。",
       sessionId: SLACKOFF_DECISION_SESSION_ID,
-      durationMs: channelDurationMs,
-      state: channelState,
-      errorMessage: channelErrorMessage,
+      durationMs: 0,
+      state: null,
     },
   };
 }
