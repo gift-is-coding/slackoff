@@ -1,6 +1,8 @@
 export type Priority = "P0" | "P1" | "P2" | "P3";
 export type Risk = "low" | "medium" | "high";
 
+export type InboxTab = "pending" | "processed";
+
 export type ItemStep = "step1" | "step2" | "step3";
 
 export type ItemStepState = {

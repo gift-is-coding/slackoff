@@ -21,6 +21,7 @@ export type NotificationItem = {
   created_at: string;
   updated_at: string;
   notes: string;
+  ai_reply?: string;
 };
 
 type NotificationInbox = {
@@ -71,6 +72,18 @@ export async function readPendingNotifications(): Promise<NotificationItem[]> {
   const inbox = await readNotificationInbox();
 
   return inbox.items.filter((item) => !PROCESSED_STATUSES.has(item.status));
+}
+
+export async function readProcessedNotifications(): Promise<NotificationItem[]> {
+  const inbox = await readNotificationInbox();
+
+  return inbox.items
+    .filter((item) => PROCESSED_STATUSES.has(item.status))
+    .sort((a, b) => {
+      const ta = new Date(a.updated_at).getTime() || 0;
+      const tb = new Date(b.updated_at).getTime() || 0;
+      return tb - ta;
+    });
 }
 
 /**

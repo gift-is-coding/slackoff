@@ -104,7 +104,7 @@ export function mapNotificationToWorkItem(item: NotificationItem): WorkItem {
     recommendedAction: "待确认",
     explanation: "",
     sourceMessage: item.content,
-    aiDraft: "",
+    aiDraft: item.ai_reply?.trim() ?? "",
     finalRecipients: `来源: ${sourceLabel}`,
     previewDraft: "",
     previewNote: "",

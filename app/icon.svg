@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs>
+    <filter id="neon" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <rect width="100" height="100" fill="#0a0e14" rx="20" />
+  <text x="50" y="58" font-family="monospace" font-size="45" font-weight="900" fill="#22c55e" text-anchor="middle" dominant-baseline="middle" filter="url(#neon)">&gt;S_</text>
+</svg>

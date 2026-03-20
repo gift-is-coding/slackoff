@@ -1,13 +1,21 @@
 import { NextResponse } from "next/server";
-import { readPendingNotifications } from "@/lib/openclaw/notification-inbox";
+import type { NextRequest } from "next/server";
+import {
+  readPendingNotifications,
+  readProcessedNotifications,
+} from "@/lib/openclaw/notification-inbox";
 import { mapNotificationsToWorkItems } from "@/lib/slackoff/work-item-mapper";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const notifications = await readPendingNotifications();
+    const tab = request.nextUrl.searchParams.get("tab");
+    const notifications =
+      tab === "processed"
+        ? await readProcessedNotifications()
+        : await readPendingNotifications();
     const items = mapNotificationsToWorkItems(notifications);
 
     return NextResponse.json({

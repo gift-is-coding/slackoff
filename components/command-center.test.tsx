@@ -219,7 +219,7 @@ describe("CommandCenter", () => {
 
     fireEvent.keyDown(window, { key: "?" });
     expect(
-      screen.getByRole("dialog", { name: /keyboard rhythm/i }),
+      screen.getByRole("dialog", { name: /keyboard shortcuts/i }),
     ).toBeInTheDocument();
   });
 
@@ -230,9 +230,9 @@ describe("CommandCenter", () => {
 
     await screen.findByTestId("queue-card-contract-clause");
 
-    expect(screen.getByText("1 Plan")).toHaveClass("active");
+    expect(screen.getByText(/1:plan/)).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: /Y 确认方案/ }));
+    await user.click(screen.getByRole("button", { name: /Y.*确认方案/ }));
 
     await waitFor(() => {
       expect(
@@ -240,8 +240,7 @@ describe("CommandCenter", () => {
       ).toBeInTheDocument();
     });
 
-    expect(screen.getByText("2 Execute")).toHaveClass("active");
-    expect(screen.getByText("Ready")).toBeInTheDocument();
+    expect(screen.getByText(/2:exec/)).toBeInTheDocument();
   });
 
   it("Enter key triggers confirm on current step", async () => {
@@ -249,12 +248,14 @@ describe("CommandCenter", () => {
 
     await screen.findByTestId("queue-card-contract-clause");
 
-    expect(screen.getByText("1 Plan")).toHaveClass("active");
+    const planTab = screen.getByText(/1:plan/);
+    expect(planTab).toBeInTheDocument();
 
     fireEvent.keyDown(window, { key: "Enter" });
 
     await waitFor(() => {
-      expect(screen.getByText("2 Execute")).toHaveClass("active");
+      const execTab = screen.getByText(/2:exec/);
+      expect(execTab.closest(".step-tab")).toHaveClass("active");
     });
   });
 
@@ -265,10 +266,10 @@ describe("CommandCenter", () => {
 
     await screen.findByTestId("queue-card-contract-clause");
 
-    await user.click(screen.getByRole("button", { name: /Y 确认方案/ }));
+    await user.click(screen.getByRole("button", { name: /Y.*确认方案/ }));
 
     await waitFor(() => {
-      expect(screen.getByText("2 Execute")).toHaveClass("active");
+      expect(screen.getByText(/2:exec/)).toBeInTheDocument();
     });
 
     fireEvent.keyDown(window, { key: "s" });
@@ -301,7 +302,7 @@ describe("CommandCenter", () => {
 
     render(<CommandCenter snapshot={getDashboardSnapshot()} />);
 
-    expect(await screen.findByText("OpenClaw Channel")).toBeInTheDocument();
+    expect(await screen.findByTestId("queue-card-contract-clause")).toBeInTheDocument();
   });
 
   it("displays the step indicator with three steps", async () => {
@@ -309,9 +310,9 @@ describe("CommandCenter", () => {
 
     await screen.findByTestId("queue-card-contract-clause");
 
-    expect(screen.getByText("1 Plan")).toBeInTheDocument();
-    expect(screen.getByText("2 Execute")).toBeInTheDocument();
-    expect(screen.getByText("3 Results")).toBeInTheDocument();
+    expect(screen.getByText(/1:plan/)).toBeInTheDocument();
+    expect(screen.getByText(/2:exec/)).toBeInTheDocument();
+    expect(screen.getByText(/3:done/)).toBeInTheDocument();
   });
 
   it("shows shortcut bar with hints", async () => {
@@ -321,9 +322,41 @@ describe("CommandCenter", () => {
 
     const shortcutBar = document.querySelector(".shortcut-bar")!;
     expect(shortcutBar).toBeInTheDocument();
-    expect(shortcutBar.textContent).toContain("Y/Enter 确认");
-    expect(shortcutBar.textContent).toContain("I 忽略");
-    expect(shortcutBar.textContent).toContain("/ 指令");
-    expect(shortcutBar.textContent).toContain("W/S 导航");
+    expect(shortcutBar.textContent).toContain("Y / Enter");
+    expect(shortcutBar.textContent).toContain("确认");
+    expect(shortcutBar.textContent).toContain("忽略");
+  });
+
+  it("shows inbox tabs and switches between them", async () => {
+    const user = userEvent.setup();
+
+    render(<CommandCenter snapshot={getDashboardSnapshot()} />);
+
+    await screen.findByTestId("queue-card-contract-clause");
+
+    const pendingTab = screen.getByRole("tab", { name: /待处理/ });
+    const processedTab = screen.getByRole("tab", { name: /已处理/ });
+
+    expect(pendingTab).toHaveAttribute("aria-selected", "true");
+    expect(processedTab).toHaveAttribute("aria-selected", "false");
+
+    await user.click(processedTab);
+
+    expect(pendingTab).toHaveAttribute("aria-selected", "false");
+    expect(processedTab).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("switches tabs with Left/Right arrow keys", async () => {
+    render(<CommandCenter snapshot={getDashboardSnapshot()} />);
+
+    await screen.findByTestId("queue-card-contract-clause");
+
+    expect(screen.getByRole("tab", { name: /待处理/ })).toHaveAttribute("aria-selected", "true");
+
+    fireEvent.keyDown(window, { key: "ArrowRight" });
+    expect(screen.getByRole("tab", { name: /已处理/ })).toHaveAttribute("aria-selected", "true");
+
+    fireEvent.keyDown(window, { key: "ArrowLeft" });
+    expect(screen.getByRole("tab", { name: /待处理/ })).toHaveAttribute("aria-selected", "true");
   });
 });

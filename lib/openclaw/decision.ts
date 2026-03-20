@@ -106,21 +106,39 @@ export function normalizeDecisionRequestBody(body: unknown): SubmitDecisionParam
   };
 }
 
+/**
+ * When slashCommand starts with ":", mode is "direct_reply" — the text after
+ * ":" is the exact message content to send. When it starts with "/", mode is
+ * "instruction" — the text is an agent instruction (e.g. /rewrite 更简洁).
+ */
+function resolveSlashCommandMode(slashCommand?: string): {
+  mode: "direct_reply" | "instruction";
+  content: string;
+} {
+  if (slashCommand?.startsWith(":")) {
+    return { mode: "direct_reply", content: slashCommand.slice(1).trim() };
+  }
+  return { mode: "instruction", content: slashCommand || "" };
+}
+
 function buildDecisionBridgeEnvelope(
   params: SubmitDecisionParams,
 ): DecisionBridgeEnvelope {
   switch (params.action) {
-    case "approve_plan":
+    case "approve_plan": {
+      const sc = resolveSlashCommandMode(params.slashCommand);
       return {
         type: "decision.plan_approved",
         payload: {
           itemId: params.itemId,
           decision: "approve_plan",
-          slashCommand: params.slashCommand || "",
+          slashCommand: sc.content,
+          slashCommandMode: sc.mode,
           source: params.source,
           summary: params.summary,
         },
       };
+    }
     case "ignore":
       return {
         type: "decision.ignored",
@@ -131,17 +149,20 @@ function buildDecisionBridgeEnvelope(
           summary: params.summary,
         },
       };
-    case "request_edit":
+    case "request_edit": {
+      const sc = resolveSlashCommandMode(params.slashCommand);
       return {
         type: "decision.edit_requested",
         payload: {
           itemId: params.itemId,
           decision: "request_edit",
-          slashCommand: params.slashCommand || "",
+          slashCommand: sc.content,
+          slashCommandMode: sc.mode,
           source: params.source,
           summary: params.summary,
         },
       };
+    }
     case "confirm_execute":
       return {
         type: "decision.execute_confirmed",
@@ -158,32 +179,51 @@ function buildDecisionBridgeEnvelope(
 }
 
 export function buildDecisionChannelMessage(params: {
-  bridgeType: string;
+  action: OpenClawDecisionAction;
+  slashCommand: string;
+  slashCommandMode: "instruction" | "direct_reply";
+  source: string;
+  summary: string;
+  finalRecipients?: string;
+  previewDraft?: string;
   bridgeFilePath?: string;
-  payload: Record<string, unknown>;
 }) {
-  const bridgePathLine = params.bridgeFilePath
-    ? `Bridge inbox file: ${params.bridgeFilePath}`
-    : "Bridge inbox file: unavailable";
+  const bridgeLine = params.bridgeFilePath
+    ? `Bridge file: ${params.bridgeFilePath}`
+    : "Bridge file: unavailable";
 
-  return [
-    "You are the local OpenClaw runtime connected to Slackoff.",
-    "A human operator just made an internal decision in Slackoff.",
-    "This is not confirmation that any external message has already been sent.",
-    "Acknowledge the decision in Chinese with exactly two short lines.",
-    "Line 1 must start with ACK: and describe the accepted human decision.",
-    "Line 2 must start with NEXT: and describe the next internal OpenClaw step.",
-    bridgePathLine,
-    "Decision envelope:",
-    JSON.stringify(
-      {
-        bridgeType: params.bridgeType,
-        payload: params.payload,
-      },
-      null,
-      2,
-    ),
-  ].join("\n\n");
+  if (params.slashCommandMode === "direct_reply" && params.slashCommand) {
+    return [
+      `[Slackoff decision] action=${params.action} source=${params.source}`,
+      `Summary: ${params.summary}`,
+      `Operator instruction: reply with EXACTLY the following content, do not modify or paraphrase it:`,
+      `---`,
+      params.slashCommand,
+      `---`,
+      bridgeLine,
+    ].join("\n");
+  }
+
+  const lines = [
+    `[Slackoff decision] action=${params.action} source=${params.source}`,
+    `Summary: ${params.summary}`,
+  ];
+
+  if (params.slashCommand) {
+    lines.push(`Operator instruction: ${params.slashCommand}`);
+  }
+
+  if (params.finalRecipients) {
+    lines.push(`Recipients: ${params.finalRecipients}`);
+  }
+
+  if (params.previewDraft) {
+    lines.push(`Draft preview: ${params.previewDraft}`);
+  }
+
+  lines.push(bridgeLine);
+
+  return lines.join("\n");
 }
 
 export async function submitDecisionToOpenClaw(
@@ -193,7 +233,6 @@ export async function submitDecisionToOpenClaw(
   let bridgeFilePath: string | null = null;
   let bridgeErrorMessage: string | undefined;
 
-  // Persist the decision status to the notification inbox file
   const newStatus = ACTION_TO_STATUS[params.action];
   await writeNotificationStatus(params.itemId, newStatus);
 
@@ -205,10 +244,44 @@ export async function submitDecisionToOpenClaw(
       error instanceof Error ? error.message : "Failed to queue bridge envelope";
   }
 
+  const sc = resolveSlashCommandMode(params.slashCommand);
+  const channelMessage = buildDecisionChannelMessage({
+    action: params.action,
+    slashCommand: sc.content,
+    slashCommandMode: sc.mode,
+    source: params.source,
+    summary: params.summary,
+    finalRecipients: params.finalRecipients,
+    previewDraft: params.previewDraft,
+    bridgeFilePath: bridgeFilePath ?? undefined,
+  });
+
+  let channelOk = false;
+  let channelReplyText: string | null = null;
+  let channelErrorMessage: string | undefined;
+  let channelSessionId = SLACKOFF_DECISION_SESSION_ID;
+  let channelDurationMs: number | null = null;
+  let channelState = null;
+
+  try {
+    const turn = await sendChannelMessage({
+      message: channelMessage,
+      sessionId: SLACKOFF_DECISION_SESSION_ID,
+    });
+    channelOk = true;
+    channelReplyText = turn.replyText;
+    channelSessionId = turn.meta.sessionId;
+    channelDurationMs = turn.meta.durationMs;
+    channelState = turn.state;
+  } catch (error) {
+    channelErrorMessage =
+      error instanceof Error ? error.message : "OpenClaw channel send failed";
+  }
+
   return {
     ok: true,
     action: params.action,
-    fullySynced: Boolean(bridgeFilePath),
+    fullySynced: Boolean(bridgeFilePath) && channelOk,
     bridge: {
       ok: Boolean(bridgeFilePath),
       type: bridgeEnvelope.type,
@@ -216,11 +289,12 @@ export async function submitDecisionToOpenClaw(
       errorMessage: bridgeErrorMessage,
     },
     channel: {
-      ok: true, // Mock success since we bypass the CLI
-      replyText: "操作已记录本地方案文件中，等待后台独立执行。",
-      sessionId: SLACKOFF_DECISION_SESSION_ID,
-      durationMs: 0,
-      state: null,
+      ok: channelOk,
+      replyText: channelReplyText,
+      sessionId: channelSessionId,
+      durationMs: channelDurationMs,
+      state: channelState,
+      errorMessage: channelErrorMessage,
     },
   };
 }

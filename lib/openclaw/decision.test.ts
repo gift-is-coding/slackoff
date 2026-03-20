@@ -38,20 +38,31 @@ describe("normalizeDecisionRequestBody", () => {
 });
 
 describe("buildDecisionChannelMessage", () => {
-  it("includes the bridge file path and envelope payload", () => {
+  it("instruction mode includes the operator instruction", () => {
     const message = buildDecisionChannelMessage({
-      bridgeType: "decision.plan_approved",
+      action: "approve_plan",
+      slashCommand: "rewrite 更简洁",
+      slashCommandMode: "instruction",
+      source: "Slack",
+      summary: "Need a response",
       bridgeFilePath: "/tmp/slackoff/inbox/decision.json",
-      payload: {
-        itemId: "item-1",
-        decision: "approve_plan",
-      },
     });
 
-    expect(message).toContain("Bridge inbox file: /tmp/slackoff/inbox/decision.json");
-    expect(message).toContain('"bridgeType": "decision.plan_approved"');
-    expect(message).toContain('"decision": "approve_plan"');
-    expect(message).toContain("ACK:");
-    expect(message).toContain("NEXT:");
+    expect(message).toContain("Bridge file: /tmp/slackoff/inbox/decision.json");
+    expect(message).toContain("action=approve_plan");
+    expect(message).toContain("Operator instruction: rewrite 更简洁");
+  });
+
+  it("direct_reply mode asks openclaw to send exact content", () => {
+    const message = buildDecisionChannelMessage({
+      action: "approve_plan",
+      slashCommand: "好的，我周末有空",
+      slashCommandMode: "direct_reply",
+      source: "Email",
+      summary: "Weekend plans",
+    });
+
+    expect(message).toContain("reply with EXACTLY the following content");
+    expect(message).toContain("好的，我周末有空");
   });
 });
