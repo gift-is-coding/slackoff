@@ -1,11 +1,5 @@
 import type { Metadata } from "next";
-import { Space_Grotesk } from "next/font/google";
 import "./globals.css";
-
-const spaceGrotesk = Space_Grotesk({
-  variable: "--font-display",
-  subsets: ["latin"],
-});
 
 export const metadata: Metadata = {
   title: "Slackoff Command Center",
@@ -22,7 +16,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={spaceGrotesk.variable}>
+      <body>
         <ErrorBoundary>
           <I18nProvider>{children}</I18nProvider>
         </ErrorBoundary>

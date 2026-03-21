@@ -3,7 +3,7 @@
    Sharp corners, monospace, dark matrix vibe, neon highlights
    ══════════════════════════════════════════════════════════════ */
 
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap');
+/* Fonts served locally — no external network requests required */
 
 :root {
   --bg: #0a0e14;
