@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { AppLogo } from "@/components/app-logo";
 import {
   useDeferredValue,
   useCallback,
@@ -10,6 +11,7 @@ import {
   useState,
 } from "react";
 import { CommandCenterWorkspace } from "@/components/command-center-workspace";
+import { useTranslation } from "@/lib/i18n/context";
 import {
   filterWorkItems,
   getAdjacentItemId,
@@ -122,6 +124,7 @@ function setItemStepImmutable(
 }
 
 export function CommandCenter({ snapshot }: CommandCenterProps) {
+  const { t, toggleLang } = useTranslation();
   const [activeTab, setActiveTab] = useState<InboxTab>("pending");
   const [items, setItems] = useState<WorkItem[]>(snapshot.items);
   const [processedItems, setProcessedItems] = useState<WorkItem[]>([]);
@@ -135,7 +138,7 @@ export function CommandCenter({ snapshot }: CommandCenterProps) {
   const [itemSteps, setItemSteps] = useState<Map<string, ItemStepState>>(
     () => new Map(),
   );
-  const DEFAULT_DRAFT = "/rewrite 更简洁，先确认对方可接受截止时间";
+  const DEFAULT_DRAFT = t("defaultDraft");
   const [commandDrafts, setCommandDrafts] = useState<Map<string, string>>(
     () => new Map(),
   );
@@ -152,7 +155,7 @@ export function CommandCenter({ snapshot }: CommandCenterProps) {
   );
   const [bridge, setBridge] = useState<OpenClawBridgeStatus | null>(null);
   const [bridgeNotice, setBridgeNotice] = useState(
-    "尚未向 OpenClaw bridge/inbox 写入人工决策。",
+    t("bridgeNoDecision"),
   );
   const [decisionReply, setDecisionReply] = useState<string | null>(null);
   const [isBridgeSubmitting, setIsBridgeSubmitting] = useState(false);
@@ -200,7 +203,7 @@ export function CommandCenter({ snapshot }: CommandCenterProps) {
     setItemSteps((current) =>
       setItemStepImmutable(current, itemId, { hasNotification: false }),
     );
-    setBridgeNotice("尚未向 OpenClaw bridge/inbox 写入人工决策。");
+    setBridgeNotice(t("bridgeNoDecision"));
     setDecisionReply(null);
 
     // Auto-scroll the selected card into view
@@ -210,7 +213,7 @@ export function CommandCenter({ snapshot }: CommandCenterProps) {
       );
       card?.scrollIntoView({ block: "nearest", behavior: "smooth" });
     });
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     if (selectedItemId) {
@@ -228,10 +231,10 @@ export function CommandCenter({ snapshot }: CommandCenterProps) {
       setActiveTab(tab);
       setSelectedItemId(null);
       setQuery("");
-      setBridgeNotice("尚未向 OpenClaw bridge/inbox 写入人工决策。");
+      setBridgeNotice(t("bridgeNoDecision"));
       setDecisionReply(null);
     },
-    [activeTab],
+    [activeTab, t],
   );
 
   useEffect(() => {
@@ -454,7 +457,7 @@ export function CommandCenter({ snapshot }: CommandCenterProps) {
     }
 
     setIsBridgeSubmitting(true);
-    setBridgeNotice("正在把审批动作同步到 OpenClaw ...");
+    setBridgeNotice(t("bridgeSyncing"));
     setDecisionReply(null);
 
     try {
@@ -492,11 +495,11 @@ export function CommandCenter({ snapshot }: CommandCenterProps) {
 
       if (payload.bridge.ok && payload.bridge.filePath) {
         setBridgeNotice(
-          `${params.successLabel} 已写入 ${payload.bridge.filePath}`,
+          `${params.successLabel} ${t("bridgeWritten")} ${payload.bridge.filePath}`,
         );
       } else {
         setBridgeNotice(
-          `${params.successLabel} 已发给 OpenClaw，但 bridge 写入失败：${
+          `${params.successLabel} ${t("bridgeFail")}${
             payload.bridge.errorMessage || "unknown bridge error"
           }`,
         );
@@ -504,11 +507,11 @@ export function CommandCenter({ snapshot }: CommandCenterProps) {
 
       if (payload.channel.ok) {
         setDecisionReply(
-          payload.channel.replyText || "OpenClaw 已确认该审批动作。",
+          payload.channel.replyText || t("channelConfirmed"),
         );
       } else {
         setDecisionReply(
-          payload.channel.errorMessage || "OpenClaw channel 未返回确认消息。",
+          payload.channel.errorMessage || t("channelNoConfirm"),
         );
       }
 
@@ -521,7 +524,7 @@ export function CommandCenter({ snapshot }: CommandCenterProps) {
       return payload.fullySynced;
     } catch (error) {
       setBridgeNotice(
-        error instanceof Error ? error.message : "OpenClaw 审批动作同步失败",
+        error instanceof Error ? error.message : t("bridgeSyncFail"),
       );
       setDecisionReply(null);
       return false;
@@ -533,7 +536,7 @@ export function CommandCenter({ snapshot }: CommandCenterProps) {
   async function handleApprovePlan() {
     const succeeded = await submitDecision({
       action: "approve_plan",
-      successLabel: "方案确认",
+      successLabel: t("bridgePlanLabel"),
     });
 
     if (succeeded && selectedItem) {
@@ -558,7 +561,7 @@ export function CommandCenter({ snapshot }: CommandCenterProps) {
     }
 
     // Reset UI state for the new selection
-    setBridgeNotice("尚未向 OpenClaw bridge/inbox 写入人工决策。");
+    setBridgeNotice(t("bridgeNoDecision"));
     setDecisionReply(null);
 
     // Fire the backend call in the background — do NOT use submitDecision()
@@ -584,7 +587,7 @@ export function CommandCenter({ snapshot }: CommandCenterProps) {
   async function handleConfirmExecute() {
     const succeeded = await submitDecision({
       action: "confirm_execute",
-      successLabel: "执行确认",
+      successLabel: t("bridgeExecLabel"),
     });
 
     if (succeeded && selectedItem) {
@@ -733,16 +736,19 @@ export function CommandCenter({ snapshot }: CommandCenterProps) {
                 slackoff
               </span>
               <h1 className="pane-title">
-                <span className="title-cursor">▌</span>inbox
+                <span className="title-cursor">▌</span>{t("inbox")}
               </h1>
             </div>
-            <button
+            <div style={{ display: "flex", gap: "8px" }}>
+              <button className="filter-pill" onClick={toggleLang} type="button">[{t("switchLang")}]</button>
+              <button
               className={`filter-pill ${showFocusOnly ? "active" : ""}`}
               onClick={() => setShowFocusOnly((current) => !current)}
               type="button"
             >
               {showFocusOnly ? "[P0/P1]" : "[ALL]"}
             </button>
+            </div>
           </header>
 
           <div className="inbox-tabs" role="tablist" aria-label="Inbox tabs">
@@ -754,7 +760,7 @@ export function CommandCenter({ snapshot }: CommandCenterProps) {
               type="button"
             >
               <span className="tab-key">1</span>
-              待处理
+              {t("pending")}
               {items.length > 0 && (
                 <span className="tab-count">{items.length}</span>
               )}
@@ -767,7 +773,7 @@ export function CommandCenter({ snapshot }: CommandCenterProps) {
               type="button"
             >
               <span className="tab-key">2</span>
-              已处理
+              {t("processed")}
               {processedItems.length > 0 && (
                 <span className="tab-count">{processedItems.length}</span>
               )}
@@ -779,7 +785,7 @@ export function CommandCenter({ snapshot }: CommandCenterProps) {
             <input
               aria-label="Search queue"
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="filter ..."
+              placeholder={t("filterPlaceholder")}
               value={query}
             />
           </div>
@@ -815,7 +821,9 @@ export function CommandCenter({ snapshot }: CommandCenterProps) {
                       </div>
                       <p className="queue-title">{item.summary}</p>
                       <div className="queue-meta">
-                        <span>{item.source}</span>
+                        <span style={{ display: "inline-flex", alignItems: "center" }}>
+                          <AppLogo source={item.source} /> {item.source}
+                        </span>
                         <span>{item.deadline}</span>
                         <span className={`risk-${item.risk}`}>
                           {item.riskLabel}

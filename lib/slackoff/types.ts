@@ -28,6 +28,7 @@ export type WorkItem = {
   previewDraft: string;
   previewNote: string;
   screenshotCaption: string;
+  screenshotUrl?: string;
 };
 
 export type IntegrationBoundary = {

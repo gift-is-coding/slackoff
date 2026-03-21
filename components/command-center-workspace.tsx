@@ -1,5 +1,7 @@
 import { useEffect, useRef } from "react";
 import type { RefObject } from "react";
+import { AppLogo } from "@/components/app-logo";
+import { useTranslation } from "@/lib/i18n/context";
 import type {
   ItemStepState,
   OpenClawBridgeStatus,
@@ -34,15 +36,15 @@ type CommandCenterWorkspaceProps = {
   onDebugSend: (message: string) => void;
 };
 
-const keyboardShortcuts = [
-  { key: "W / ↑", description: "上移" },
-  { key: "S / ↓", description: "下移" },
-  { key: "Y / Enter", description: "确认" },
-  { key: "I", description: "忽略" },
-  { key: "/ :", description: "AI指示/直接回复" },
-  { key: "F", description: "焦点" },
-  { key: "?", description: "帮助" },
-  { key: "Esc", description: "退出" },
+const getKeyboardShortcuts = (t: (key: string) => string) => [
+  { key: "W / ↑", description: t("scUp") },
+  { key: "S / ↓", description: t("scDown") },
+  { key: "Y / Enter", description: t("scConfirm") },
+  { key: "I", description: t("scIgnore") },
+  { key: "/ :", description: t("scCommand") },
+  { key: "F", description: t("scFocus") },
+  { key: "?", description: t("scHelp") },
+  { key: "Esc", description: t("scEsc") },
 ];
 
 function StepIndicator({ step }: { step: "step1" | "step2" | "step3" }) {
@@ -61,12 +63,10 @@ function StepIndicator({ step }: { step: "step1" | "step2" | "step3" }) {
   );
 }
 
-function slashModeLabel(draft: string) {
-  const isColon = draft.startsWith(":");
-  const isSlash = draft.startsWith("/");
-  const slashPart = isSlash ? "[/] AI指示" : "/ AI指示";
-  const colonPart = isColon ? "[:] 直接回复" : ": 直接回复";
-  return `> ${slashPart}   ${colonPart}`;
+function slashModeLabel(draft: string, t: (key: string) => string) {
+  if (draft.startsWith(":")) return `> ${t("slashDirectReply")}`;
+  if (draft.startsWith("/")) return `> ${t("slashAiInstruction")}`;
+  return ">_";
 }
 
 function StepOnePlan({
@@ -90,14 +90,15 @@ function StepOnePlan({
   onIgnore: () => void;
   onCommandDraftChange: (value: string) => void;
 }) {
+  const { t } = useTranslation();
   const isLowRisk = selectedItem.risk === "low";
   return (
     <div className="step-content">
       <article className="card">
-        <h3>{"// 原始消息"}</h3>
+        <h3>{`// ${t("srcOriginalMessage")}`}</h3>
         <div className="source-grid">
           <div className="source-chip-row">
-            <span className="chip">src:{selectedItem.source}</span>
+            <span className="chip" style={{ display: "inline-flex", alignItems: "center" }}><AppLogo source={selectedItem.source} /> src:{selectedItem.source}</span>
             <span className="chip">to:{selectedItem.owner}</span>
             <span className="chip">act:{selectedItem.recommendedAction}</span>
           </div>
@@ -106,10 +107,10 @@ function StepOnePlan({
       </article>
 
       <article className="card">
-        <h3>{"// AI 建议"}</h3>
-        <p className="draft-text">{selectedItem.aiDraft || "（无AI草稿）"}</p>
+        <h3>{`// ${t("srcAiSuggestion")}`}</h3>
+        <p className="draft-text">{selectedItem.aiDraft || t("srcNoAiDraft")}</p>
         <div className="slash-box">
-          <label htmlFor="slash-command">{slashModeLabel(commandDraft)}</label>
+          <label htmlFor="slash-command">{slashModeLabel(commandDraft, t as unknown as (k: string) => string)}</label>
           <input
             id="slash-command"
             onChange={(event) => onCommandDraftChange(event.target.value)}
@@ -119,7 +120,7 @@ function StepOnePlan({
         </div>
         {isLowRisk && (
           <p className="ignore-hint" aria-live="polite">
-            ▸ 风险低 — 按 <strong>I</strong> 或 <strong>回车</strong> 可直接忽略
+            {t("riskLowHint")} <strong>{t("riskLowKeyI")}</strong> {t("riskLowKeyOr")} <strong>{t("riskLowKeyEnter")}</strong> {t("riskLowSuffix")}
           </p>
         )}
         <div className="action-strip">
@@ -130,7 +131,7 @@ function StepOnePlan({
             onClick={onApprovePlan}
             type="button"
           >
-            [Y] 确认方案
+            {t("btnApprovePlan")}
           </button>
           <button
             aria-keyshortcuts="I"
@@ -139,7 +140,7 @@ function StepOnePlan({
             onClick={onIgnore}
             type="button"
           >
-            [<span className={isLowRisk ? "key-highlight" : undefined}>I</span>] 忽略
+            [<span className={isLowRisk ? "key-highlight" : undefined}>I</span>] {t("btnIgnore")}
           </button>
         </div>
         <p aria-live="polite" className="bridge-notice">
@@ -176,10 +177,11 @@ function StepTwoExecute({
   onIgnore: () => void;
   onCommandDraftChange: (value: string) => void;
 }) {
+  const { t } = useTranslation();
   return (
     <div className="step-content">
       <article className="card">
-        <h3>{"// 执行预览"}</h3>
+        <h3>{`// ${t("srcExecPreview")}`}</h3>
         <div className="preview-frame">
           <div className="preview-window">
             <div className="window-bar">
@@ -202,7 +204,7 @@ function StepTwoExecute({
       <article className="card">
         <div className="slash-box">
           <label htmlFor="slash-command-step2">
-            {slashModeLabel(commandDraft)}
+            {slashModeLabel(commandDraft, t as unknown as (k: string) => string)}
           </label>
           <input
             id="slash-command-step2"
@@ -219,7 +221,7 @@ function StepTwoExecute({
             onClick={onConfirmExecute}
             type="button"
           >
-            [Y] 确认执行
+            {t("btnConfirmExec")}
           </button>
           <button
             aria-keyshortcuts="I"
@@ -228,7 +230,7 @@ function StepTwoExecute({
             onClick={onIgnore}
             type="button"
           >
-            [<span className="key-highlight">I</span>] 取消
+            [<span className="key-highlight">I</span>] {t("btnCancel")}
           </button>
         </div>
         <p aria-live="polite" className="bridge-notice">
@@ -245,20 +247,33 @@ function StepTwoExecute({
 }
 
 function StepThreeResults({
+  selectedItem,
   bridgeNotice,
   decisionReply,
 }: {
+  selectedItem: WorkItem;
   bridgeNotice: string;
   decisionReply: string | null;
 }) {
+  const { t } = useTranslation();
   return (
     <div className="step-content">
       <article className="card">
-        <h3>{"// 执行结果"}</h3>
+        <h3>{`// ${t("srcExecResult")}`}</h3>
         <div className="result-status success">
-          <strong>✓ done</strong>
-          <p>该条目已处理完毕。</p>
+          <strong>{t("doneTitle")}</strong>
+          <p>{t("doneDesc")}</p>
         </div>
+        {selectedItem.screenshotUrl && (
+          <div style={{ marginTop: "16px" }}>
+            <p className="preview-caption">{selectedItem.screenshotCaption}</p>
+            <img
+              src={selectedItem.screenshotUrl}
+              alt="execution preview"
+              style={{ width: "100%", height: "auto", display: "block", border: "1px solid var(--border)", borderRadius: "4px" }}
+            />
+          </div>
+        )}
         <p aria-live="polite" className="bridge-notice">
           {bridgeNotice}
         </p>
@@ -273,13 +288,14 @@ function StepThreeResults({
 }
 
 function ProcessedItemSummary({ selectedItem }: { selectedItem: WorkItem }) {
+  const { t } = useTranslation();
   return (
     <div className="step-content">
       <article className="card">
-        <h3>{"// 已处理"}</h3>
+        <h3>{`// ${t("srcProcessed")}`}</h3>
         <div className="source-grid">
           <div className="source-chip-row">
-            <span className="chip">src:{selectedItem.source}</span>
+            <span className="chip" style={{ display: "inline-flex", alignItems: "center" }}><AppLogo source={selectedItem.source} /> src:{selectedItem.source}</span>
             <span className="chip">to:{selectedItem.owner}</span>
           </div>
           <p className="source-message">{selectedItem.sourceMessage}</p>
@@ -288,7 +304,7 @@ function ProcessedItemSummary({ selectedItem }: { selectedItem: WorkItem }) {
 
       {selectedItem.aiDraft ? (
         <article className="card">
-          <h3>{"// AI 建议"}</h3>
+          <h3>{`// ${t("srcAiSuggestion")}`}</h3>
           <p className="draft-text">{selectedItem.aiDraft}</p>
         </article>
       ) : null}
@@ -313,6 +329,7 @@ function DebugConsole({
   onSend: (message: string) => void;
   onToggle: () => void;
 }) {
+  const { t } = useTranslation();
   const logRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -327,7 +344,6 @@ function DebugConsole({
         className="debug-toggle"
         onClick={onToggle}
         type="button"
-        title="OpenClaw 调试控制台"
       >
         {isOpen ? "[×] openclaw" : "[>_] openclaw"}
       </button>
@@ -336,7 +352,7 @@ function DebugConsole({
         <div className="debug-panel">
           <div className="debug-log" ref={logRef}>
             {history.length === 0 ? (
-              <div className="debug-empty">直接发消息给 openclaw CLI</div>
+              <div className="debug-empty">{t("debugEmpty")}</div>
             ) : (
               history.map((entry, i) => (
                 <div key={i} className={`debug-entry debug-${entry.role}`}>
@@ -370,7 +386,7 @@ function DebugConsole({
                   onSend(input);
                 }
               }}
-              placeholder="发消息给 openclaw ..."
+              placeholder={t("debugPlaceholder")}
               value={input}
             />
             <button
@@ -413,6 +429,7 @@ export function CommandCenterWorkspace({
   onDebugInputChange,
   onDebugSend,
 }: CommandCenterWorkspaceProps) {
+  const { t } = useTranslation();
   const step = currentStep?.step ?? "step1";
 
   return (
@@ -466,16 +483,17 @@ export function CommandCenterWorkspace({
 
                 {step === "step3" && (
                   <StepThreeResults
-                    bridgeNotice={bridgeNotice}
-                    decisionReply={decisionReply}
-                  />
+            bridgeNotice={bridgeNotice}
+            decisionReply={decisionReply}
+            selectedItem={selectedItem}
+          />
                 )}
               </>
             )}
           </div>
 
           <div className="shortcut-bar">
-            {keyboardShortcuts.slice(0, 5).map((s) => (
+            {getKeyboardShortcuts(t as unknown as (k: string) => string).slice(0, 5).map((s) => (
               <span
                 className={`shortcut-hint${s.key === "I" ? " shortcut-hint-ignore" : ""}`}
                 key={s.key}
@@ -509,7 +527,7 @@ export function CommandCenterWorkspace({
                 </button>
               </div>
               <div className="shortcut-grid">
-                {keyboardShortcuts.map((shortcut) => (
+                {getKeyboardShortcuts(t as unknown as (k: string) => string).map((shortcut) => (
                   <div className="shortcut-item" key={shortcut.key}>
                     <strong>{shortcut.key}</strong>
                     <span>{shortcut.description}</span>
@@ -521,8 +539,8 @@ export function CommandCenterWorkspace({
         </div>
       ) : (
         <div className="empty-workspace">
-          <strong>&gt; no items selected</strong>
-          <p>清空过滤条件或等待新消息。</p>
+          <strong>{t("noItemsTitle")}</strong>
+          <p>{t("noItemsDesc")}</p>
         </div>
       )}
     </>

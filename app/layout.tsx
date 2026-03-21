@@ -12,14 +12,18 @@ export const metadata: Metadata = {
   description: "Slackoff front-end shell for triage and human approval on top of a local OpenClaw gateway.",
 };
 
+import { I18nProvider } from "@/lib/i18n/context";
+
 export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="zh-CN">
-      <body className={spaceGrotesk.variable}>{children}</body>
+    <html lang="en">
+      <body className={spaceGrotesk.variable}>
+        <I18nProvider>{children}</I18nProvider>
+      </body>
     </html>
   );
 }

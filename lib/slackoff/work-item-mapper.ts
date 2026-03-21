@@ -106,9 +106,10 @@ export function mapNotificationToWorkItem(item: NotificationItem): WorkItem {
     sourceMessage: item.content,
     aiDraft: item.ai_reply?.trim() ?? "",
     finalRecipients: `来源: ${sourceLabel}`,
-    previewDraft: "",
+    previewDraft: item.execution_plan ?? "",
     previewNote: "",
-    screenshotCaption: "",
+    screenshotCaption: item.screenshot_url ? "预执行画面 (Screenshot ahead of execution)" : "",
+    screenshotUrl: item.screenshot_url,
   };
 }
 

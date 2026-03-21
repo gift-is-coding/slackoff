@@ -22,6 +22,8 @@ export type NotificationItem = {
   updated_at: string;
   notes: string;
   ai_reply?: string;
+  execution_plan?: string;
+  screenshot_url?: string;
 };
 
 type NotificationInbox = {
