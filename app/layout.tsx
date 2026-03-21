@@ -13,6 +13,7 @@ export const metadata: Metadata = {
 };
 
 import { I18nProvider } from "@/lib/i18n/context";
+import { ErrorBoundary } from "@/components/error-boundary";
 
 export default function RootLayout({
   children,
@@ -22,7 +23,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={spaceGrotesk.variable}>
-        <I18nProvider>{children}</I18nProvider>
+        <ErrorBoundary>
+          <I18nProvider>{children}</I18nProvider>
+        </ErrorBoundary>
       </body>
     </html>
   );

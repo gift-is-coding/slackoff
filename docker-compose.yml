@@ -1,0 +1,19 @@
+services:
+  slackoff:
+    build: .
+    ports:
+      - "3000:3000"
+    # Mount openclaw workspace so the container can reach local files.
+    # Adjust the host path if your openclaw state dir is non-standard.
+    volumes:
+      - "${HOME}/.openclaw:/root/.openclaw:ro"
+    env_file:
+      # Copy .env.example → .env.local and fill in any overrides before running.
+      - path: .env.local
+        required: false
+    environment:
+      - NODE_ENV=production
+    # The container needs host networking on Linux to reach ws://127.0.0.1:18789.
+    # On macOS/Windows use host.docker.internal and set OPENCLAW_GATEWAY_URL instead.
+    network_mode: host
+    restart: unless-stopped

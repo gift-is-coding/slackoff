@@ -327,8 +327,9 @@ export function CommandCenter({ snapshot }: CommandCenterProps) {
         if (isItemsPayload(processedPayload)) {
           setProcessedItems(processedPayload.items);
         }
-      } catch {
-        // Silently fail — the next poll will retry.
+      } catch (err) {
+        // Non-blocking — the next poll will retry automatically.
+        console.error("[CommandCenter] Failed to load items:", err);
       } finally {
         setItemsLoading(false);
       }
@@ -578,9 +579,9 @@ export function CommandCenter({ snapshot }: CommandCenterProps) {
       }),
     })
       .then(() => refreshItems())
-      .catch(() => {
-        // Silently fail — the item is already removed optimistically,
-        // and the server-side status was already written by the API.
+      .catch((err: unknown) => {
+        // Item is already removed optimistically from the UI; log for debuggability.
+        console.error("[CommandCenter] Background ignore decision failed:", err);
       });
   }
 

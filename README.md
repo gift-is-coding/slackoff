@@ -7,10 +7,25 @@ Slackoff 是一个前端优先的 Command Center，用来承接消息分诊、AI
 - `Slackoff`：只负责前端交互、状态可视化、双阶段确认节奏。
 - `OpenClaw`：负责本地消息/notification 采集、AI 生成、执行前截图、真实执行与审计。
 
-## 运行
+## 前置条件
+
+- **Node.js >= 20**（推荐使用 LTS 版本）
+- **OpenClaw CLI** 已安装并可在 PATH 中找到（`openclaw --version`）
+- OpenClaw gateway 已启动（默认监听 `ws://127.0.0.1:18789`）
+
+## 快速开始
 
 ```bash
+# 1. 克隆并安装依赖
+git clone <repo-url>
+cd slackoff
 npm install
+
+# 2. 配置环境变量（所有变量均有默认值，通常不需要修改）
+cp .env.example .env.local
+# 按需编辑 .env.local
+
+# 3. 启动开发服务器
 npm run dev
 ```
 
@@ -27,13 +42,13 @@ npm run dev
 
 应用服务端会优先读取本机 `~/.openclaw/openclaw.json`，自动连接本地 OpenClaw gateway。
 
-可选覆盖：
+所有环境变量均有合理默认值，完整列表和说明见 [.env.example](./.env.example)。常用覆盖项：
 
-- `OPENCLAW_CONFIG_PATH`
-- `OPENCLAW_GATEWAY_URL`
-- `OPENCLAW_GATEWAY_TOKEN`
-- `OPENCLAW_GATEWAY_PASSWORD`
-- `OPENCLAW_SLACKOFF_SESSION_KEY`
+- `OPENCLAW_CONFIG_PATH` — openclaw.json 的位置（默认：`~/.openclaw/openclaw.json`）
+- `OPENCLAW_GATEWAY_URL` — gateway WebSocket 地址（默认：`ws://127.0.0.1:18789`）
+- `OPENCLAW_GATEWAY_TOKEN` — gateway 认证 token
+- `OPENCLAW_GATEWAY_PASSWORD` — gateway 认证密码（token 的替代方案）
+- `OPENCLAW_SLACKOFF_SESSION_KEY` — RPC session key（默认：`agent:main:slackoff`）
 
 注意：
 
@@ -101,4 +116,15 @@ slackoff/
 - OpenClaw 输出 `triage items / draft / screenshot / execution status`
 - Slackoff 只消费这些结果并承载人工确认
 
-更细的边界和 I/O 约定见 [OPENCLAW_INTEGRATION.md](/Users/wutianfu/Documents/code/slackoff/docs/OPENCLAW_INTEGRATION.md)。
+更细的边界和 I/O 约定见 [OPENCLAW_INTEGRATION.md](./docs/OPENCLAW_INTEGRATION.md)。
+
+## 常见问题
+
+**Q: 页面顶部显示 "failed to reach local OpenClaw gateway"**
+A: 确认 OpenClaw gateway 正在运行，然后访问 `http://localhost:3000/api/openclaw/health` 查看详细错误。如果 gateway 端口不是 18789，通过 `OPENCLAW_GATEWAY_URL` 覆盖。
+
+**Q: 收到 "openclaw: command not found" 错误**
+A: 确认 OpenClaw CLI 已安装并在 PATH 中。如果安装在非标准位置，通过 `OPENCLAW_BIN` 指定完整路径。
+
+**Q: 没有收到任何消息/通知**
+A: 检查 `~/.openclaw/workspace/memory/notification-inbox.json` 是否存在且有内容。可以通过 `OPENCLAW_NOTIFICATION_INBOX_PATH` 指定自定义路径。
