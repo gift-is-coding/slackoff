@@ -160,6 +160,13 @@ export function CommandCenter({ snapshot }: CommandCenterProps) {
   const [decisionReply, setDecisionReply] = useState<string | null>(null);
   const [isBridgeSubmitting, setIsBridgeSubmitting] = useState(false);
 
+  // Undo window: 5-second countdown after approve_plan / confirm_execute
+  const [undoWindow, setUndoWindow] = useState<{ itemId: string; targetStep: ItemStep } | null>(null);
+  const [undoSecondsLeft, setUndoSecondsLeft] = useState(0);
+
+  // High-risk ignore: requires a second I press to confirm
+  const [highRiskIgnorePending, setHighRiskIgnorePending] = useState(false);
+
   const slashInputRef = useRef<HTMLInputElement>(null);
   const queueListRef = useRef<HTMLUListElement>(null);
   const deferredQuery = useDeferredValue(query);
@@ -223,7 +230,28 @@ export function CommandCenter({ snapshot }: CommandCenterProps) {
         }),
       );
     }
+    // Cancel any pending high-risk ignore when selection changes
+    setHighRiskIgnorePending(false);
   }, [selectedItemId]);
+
+  // Count down the undo window; advance step when it reaches zero
+  useEffect(() => {
+    if (!undoWindow) return;
+
+    if (undoSecondsLeft <= 0) {
+      advanceStep(undoWindow.itemId, undoWindow.targetStep);
+      setUndoWindow(null);
+      return;
+    }
+
+    const timerId = window.setTimeout(() => {
+      setUndoSecondsLeft((s) => s - 1);
+    }, 1000);
+
+    return () => window.clearTimeout(timerId);
+    // advanceStep reads selectedItemId via closure — stable across re-renders for our purposes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [undoWindow, undoSecondsLeft]);
 
   const switchTab = useCallback(
     (tab: InboxTab) => {
@@ -535,18 +563,54 @@ export function CommandCenter({ snapshot }: CommandCenterProps) {
   }
 
   async function handleApprovePlan() {
+    const targetItem = selectedItem;
     const succeeded = await submitDecision({
       action: "approve_plan",
       successLabel: t("bridgePlanLabel"),
     });
 
-    if (succeeded && selectedItem) {
-      advanceStep(selectedItem.id, "step2");
+    if (succeeded && targetItem) {
+      setUndoWindow({ itemId: targetItem.id, targetStep: "step2" });
+      setUndoSecondsLeft(5);
     }
+  }
+
+  async function handleUndo() {
+    if (!undoWindow || !selectedItem) return;
+
+    const itemId = undoWindow.itemId;
+    setUndoWindow(null);
+    setUndoSecondsLeft(0);
+
+    // Revert status server-side
+    fetch("/api/openclaw/decision", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "cancel",
+        itemId,
+        source: selectedItem.source,
+        summary: selectedItem.summary,
+      }),
+    })
+      .then(() => refreshItems())
+      .catch((err: unknown) => {
+        console.error("[CommandCenter] Undo cancel request failed:", err);
+      });
+
+    setBridgeNotice(t("undoCancelled"));
+    setDecisionReply(null);
   }
 
   async function handleIgnore() {
     if (!selectedItem) return;
+
+    // High-risk guard: require a second I press to confirm
+    if (selectedItem.risk === "high" && !highRiskIgnorePending) {
+      setHighRiskIgnorePending(true);
+      return;
+    }
+    setHighRiskIgnorePending(false);
 
     const ignoredItem = selectedItem;
 
@@ -586,13 +650,15 @@ export function CommandCenter({ snapshot }: CommandCenterProps) {
   }
 
   async function handleConfirmExecute() {
+    const targetItem = selectedItem;
     const succeeded = await submitDecision({
       action: "confirm_execute",
       successLabel: t("bridgeExecLabel"),
     });
 
-    if (succeeded && selectedItem) {
-      advanceStep(selectedItem.id, "step3");
+    if (succeeded && targetItem) {
+      setUndoWindow({ itemId: targetItem.id, targetStep: "step3" });
+      setUndoSecondsLeft(5);
     }
   }
 
@@ -613,6 +679,12 @@ export function CommandCenter({ snapshot }: CommandCenterProps) {
       if (showShortcutHelp) {
         event.preventDefault();
         setShowShortcutHelp(false);
+      }
+
+      if (highRiskIgnorePending) {
+        event.preventDefault();
+        setHighRiskIgnorePending(false);
+        return;
       }
 
       if (document.activeElement instanceof HTMLElement) {
@@ -704,6 +776,12 @@ export function CommandCenter({ snapshot }: CommandCenterProps) {
     }
 
     if (isBridgeSubmitting || !selectedItem || isProcessedTab) {
+      return;
+    }
+
+    if (event.key.toLowerCase() === "z" && undoWindow) {
+      event.preventDefault();
+      void handleUndo();
       return;
     }
 
@@ -877,6 +955,7 @@ export function CommandCenter({ snapshot }: CommandCenterProps) {
             debugHistory={debugHistory}
             debugInput={debugInput}
             decisionReply={decisionReply}
+            highRiskIgnorePending={highRiskIgnorePending}
             isBridgeSubmitting={isBridgeSubmitting}
             isDebugOpen={isDebugOpen}
             isDebugSending={isDebugSending}
@@ -888,9 +967,11 @@ export function CommandCenter({ snapshot }: CommandCenterProps) {
             onDebugSend={(msg) => void handleDebugSend(msg)}
             onIgnore={() => void handleIgnore()}
             onToggleDebug={() => setIsDebugOpen((prev) => !prev)}
+            onUndo={() => void handleUndo()}
             selectedItem={selectedItem}
             showShortcutHelp={showShortcutHelp}
             slashInputRef={slashInputRef}
+            undoSecondsLeft={undoWindow ? undoSecondsLeft : null}
             onToggleShortcutHelp={() =>
               setShowShortcutHelp((current) => !current)
             }

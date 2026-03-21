@@ -230,7 +230,7 @@ describe("CommandCenter", () => {
     ).toBeInTheDocument();
   });
 
-  it("submits approval and advances to step 2", async () => {
+  it("submits approval and shows undo window", async () => {
     const user = userEvent.setup();
 
     renderWithI18n(<CommandCenter snapshot={getDashboardSnapshot()} />);
@@ -247,22 +247,23 @@ describe("CommandCenter", () => {
       ).toBeInTheDocument();
     });
 
-    expect(screen.getByText(/2:exec/)).toBeInTheDocument();
+    // Step stays at 1 while the undo countdown is active; undo button is visible
+    expect(screen.getByRole("button", { name: /\[Z\]/ })).toBeInTheDocument();
+    expect(screen.getByText(/1:plan/)).toBeInTheDocument();
   });
 
-  it("Enter key triggers confirm on current step", async () => {
+  it("Enter key triggers confirm on current step and shows undo window", async () => {
     renderWithI18n(<CommandCenter snapshot={getDashboardSnapshot()} />);
 
     await screen.findByTestId("queue-card-contract-clause");
 
-    const planTab = screen.getByText(/1:plan/);
-    expect(planTab).toBeInTheDocument();
+    expect(screen.getByText(/1:plan/)).toBeInTheDocument();
 
     fireEvent.keyDown(window, { key: "Enter" });
 
+    // After approval, the undo countdown bar should appear (step stays at 1 until timer expires)
     await waitFor(() => {
-      const execTab = screen.getByText(/2:exec/);
-      expect(execTab.closest(".step-tab")).toHaveClass("active");
+      expect(screen.getByRole("button", { name: /\[Z\]/ })).toBeInTheDocument();
     });
   });
 

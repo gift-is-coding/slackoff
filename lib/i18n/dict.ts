@@ -57,6 +57,12 @@ export const dict = {
     channelConfirmed: "OpenClaw 已确认该审批动作。",
     channelNoConfirm: "OpenClaw channel 未返回确认消息。",
 
+    undoCountdown: "秒后继续，按 [Z] 撤销",
+    undoBtn: "[Z] 撤销",
+    undoCancelled: "已撤销，该条目已还原为待处理。",
+
+    highRiskIgnoreWarning: "⚠ 风险较高 — 再按一次 [I] 确认忽略，或按 [Esc] 取消",
+
     switchLang: "English",
   },
   en: {
@@ -114,6 +120,12 @@ export const dict = {
     bridgeSyncFail: "Failed to sync decision to OpenClaw",
     channelConfirmed: "OpenClaw confirmed the decision.",
     channelNoConfirm: "OpenClaw channel did not return a confirmation.",
+
+    undoCountdown: "s to proceed — press [Z] to undo",
+    undoBtn: "[Z] Undo",
+    undoCancelled: "Cancelled — item restored to pending.",
+
+    highRiskIgnoreWarning: "⚠ High risk — press [I] again to confirm ignore, or [Esc] to cancel",
 
     switchLang: "中文",
   },

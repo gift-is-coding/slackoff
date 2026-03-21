@@ -1,6 +1,9 @@
 import type { NotificationItem } from "@/lib/openclaw/notification-inbox";
 import type { Priority, Risk, WorkItem } from "@/lib/slackoff/types";
 
+const VALID_PRIORITIES = new Set<string>(["P0", "P1", "P2", "P3"]);
+const VALID_RISKS = new Set<string>(["low", "medium", "high"]);
+
 function extractSourceLabel(app: string): string {
   const lower = app.toLowerCase();
 
@@ -88,26 +91,30 @@ function formatTimeLabel(time: string): string {
 
 export function mapNotificationToWorkItem(item: NotificationItem): WorkItem {
   const sourceLabel = extractSourceLabel(item.app);
-  const priority = inferPriority(item);
-  const risk = inferRisk(item);
+  const priority: Priority = VALID_PRIORITIES.has(item.priority ?? "")
+    ? (item.priority as Priority)
+    : inferPriority(item);
+  const risk: Risk = VALID_RISKS.has(item.risk ?? "")
+    ? (item.risk as Risk)
+    : inferRisk(item);
 
   return {
     id: item.id,
     priority,
     channel: extractChannel(item.source, item.app),
     source: sourceLabel,
-    owner: sourceLabel,
+    owner: item.owner?.trim() || sourceLabel,
     summary: truncate(item.content, 80),
     deadline: formatTimeLabel(item.time),
     risk,
     riskLabel: RISK_LABELS[risk],
-    recommendedAction: "待确认",
-    explanation: "",
+    recommendedAction: item.recommended_action?.trim() || "待确认",
+    explanation: item.explanation?.trim() ?? "",
     sourceMessage: item.content,
     aiDraft: item.ai_reply?.trim() ?? "",
-    finalRecipients: `来源: ${sourceLabel}`,
+    finalRecipients: item.final_recipients?.trim() || `来源: ${sourceLabel}`,
     previewDraft: item.execution_plan ?? "",
-    previewNote: "",
+    previewNote: item.preview_note?.trim() ?? "",
     screenshotCaption: item.screenshot_url ? "预执行画面 (Screenshot ahead of execution)" : "",
     screenshotUrl: item.screenshot_url,
   };
