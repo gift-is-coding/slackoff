@@ -1101,6 +1101,15 @@ button {
   }
 }
 
+/* ─── Group badge ─── */
+
+.group-badge {
+  font-size: 9px;
+  color: var(--accent);
+  opacity: 0.8;
+  letter-spacing: 0.02em;
+}
+
 /* ─── Snooze ─── */
 
 .queue-card.snoozed {

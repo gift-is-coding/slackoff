@@ -15,6 +15,8 @@ import { useTranslation } from "@/lib/i18n/context";
 import {
   filterWorkItems,
   getAdjacentItemId,
+  groupByChannel,
+  type GroupedWorkItem,
 } from "@/lib/slackoff/command-center";
 import type {
   DashboardSnapshot,
@@ -133,7 +135,13 @@ export function CommandCenter({ snapshot }: CommandCenterProps) {
     snapshot.selectedItemId,
   );
   const [query, setQuery] = useState("");
-  const [showFocusOnly, setShowFocusOnly] = useState(false);
+  const [showFocusOnly, setShowFocusOnly] = useState(() => {
+    try {
+      return localStorage.getItem("slackoff_focus_only") === "true";
+    } catch {
+      return false;
+    }
+  });
   const [showShortcutHelp, setShowShortcutHelp] = useState(false);
   const [itemSteps, setItemSteps] = useState<Map<string, ItemStepState>>(
     () => new Map(),
@@ -168,7 +176,14 @@ export function CommandCenter({ snapshot }: CommandCenterProps) {
   const [highRiskIgnorePending, setHighRiskIgnorePending] = useState(false);
 
   // Snooze: client-side set; snoozed items are sorted to the bottom of the queue
-  const [snoozedIds, setSnoozedIds] = useState<Set<string>>(() => new Set());
+  const [snoozedIds, setSnoozedIds] = useState<Set<string>>(() => {
+    try {
+      const saved = localStorage.getItem("slackoff_snoozed");
+      return saved ? new Set(JSON.parse(saved) as string[]) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
 
   const slashInputRef = useRef<HTMLInputElement>(null);
   const queueListRef = useRef<HTMLUListElement>(null);
@@ -179,6 +194,8 @@ export function CommandCenter({ snapshot }: CommandCenterProps) {
   const visibleItems = [...filteredItems].sort(
     (a, b) => Number(snoozedIds.has(a.id)) - Number(snoozedIds.has(b.id)),
   );
+  // Collapse same-channel items into one representative card (with a +N badge)
+  const groupedVisibleItems = groupByChannel(visibleItems);
   const selectedItem =
     visibleItems.find((item) => item.id === selectedItemId) ??
     visibleItems[0] ??
@@ -236,6 +253,19 @@ export function CommandCenter({ snapshot }: CommandCenterProps) {
     // Cancel any pending high-risk ignore when selection changes
     setHighRiskIgnorePending(false);
   }, [selectedItemId]);
+
+  // Persist filter + snooze state across page refreshes
+  useEffect(() => {
+    try {
+      localStorage.setItem("slackoff_focus_only", String(showFocusOnly));
+    } catch { /* storage unavailable */ }
+  }, [showFocusOnly]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("slackoff_snoozed", JSON.stringify([...snoozedIds]));
+    } catch { /* storage unavailable */ }
+  }, [snoozedIds]);
 
   // Count down the undo window; advance step when it reaches zero
   useEffect(() => {
@@ -618,7 +648,7 @@ export function CommandCenter({ snapshot }: CommandCenterProps) {
     const ignoredItem = selectedItem;
 
     // Find the next item BEFORE removing
-    const nextId = getAdjacentItemId(visibleItems, selectedItemId, 1);
+    const nextId = getAdjacentItemId(groupedVisibleItems, selectedItemId, 1);
 
     // Optimistically remove the item from the local state immediately
     setItems((current) => current.filter((item) => item.id !== ignoredItem.id));
@@ -779,7 +809,7 @@ export function CommandCenter({ snapshot }: CommandCenterProps) {
 
     if (event.key.toLowerCase() === "w" || event.key === "ArrowUp") {
       event.preventDefault();
-      const nextId = getAdjacentItemId(visibleItems, selectedItemId, -1);
+      const nextId = getAdjacentItemId(groupedVisibleItems, selectedItemId, -1);
       if (nextId) {
         handleSelectItem(nextId);
       }
@@ -788,7 +818,7 @@ export function CommandCenter({ snapshot }: CommandCenterProps) {
 
     if (event.key === "ArrowDown") {
       event.preventDefault();
-      const nextId = getAdjacentItemId(visibleItems, selectedItemId, 1);
+      const nextId = getAdjacentItemId(groupedVisibleItems, selectedItemId, 1);
       if (nextId) {
         handleSelectItem(nextId);
       }
@@ -903,9 +933,9 @@ export function CommandCenter({ snapshot }: CommandCenterProps) {
             />
           </div>
 
-          {visibleItems.length > 0 ? (
+          {groupedVisibleItems.length > 0 ? (
             <ul className="queue-list" ref={queueListRef}>
-              {visibleItems.map((item) => {
+              {groupedVisibleItems.map((item: GroupedWorkItem) => {
                 const stepState = getItemStep(itemSteps, item.id);
                 return (
                   <li key={item.id}>
@@ -933,6 +963,11 @@ export function CommandCenter({ snapshot }: CommandCenterProps) {
                             <span className="snooze-badge" title={t("snoozed")}>⏸ </span>
                           )}
                           {item.channel}
+                          {item.groupCount > 1 && (
+                            <span className="group-badge" title={`${item.groupCount} messages from this channel`}>
+                              {" "}[+{item.groupCount - 1}]
+                            </span>
+                          )}
                         </span>
                       </div>
                       <p className="queue-title">{item.summary}</p>
