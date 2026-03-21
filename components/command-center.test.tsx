@@ -9,8 +9,15 @@ import {
   DEFAULT_OPENCLAW_DECISION_SESSION_ID,
 } from "@/lib/openclaw/constants";
 import { getDashboardSnapshot } from "@/lib/slackoff/dashboard";
+import { I18nProvider } from "@/lib/i18n/context";
 
 import type { WorkItem } from "@/lib/slackoff/types";
+
+function renderWithI18n(ui: React.ReactElement) {
+  return render(ui, {
+    wrapper: ({ children }) => <I18nProvider>{children}</I18nProvider>,
+  });
+}
 
 function makeTestItem(overrides: Partial<WorkItem> & { id: string }): WorkItem {
   return {
@@ -200,7 +207,7 @@ describe("CommandCenter", () => {
   it("filters queue cards from the search box", async () => {
     const user = userEvent.setup();
 
-    render(<CommandCenter snapshot={getDashboardSnapshot()} />);
+    renderWithI18n(<CommandCenter snapshot={getDashboardSnapshot()} />);
 
     await screen.findByTestId("queue-card-contract-clause");
 
@@ -213,7 +220,7 @@ describe("CommandCenter", () => {
   });
 
   it("supports keyboard shortcuts for focus and help", async () => {
-    render(<CommandCenter snapshot={getDashboardSnapshot()} />);
+    renderWithI18n(<CommandCenter snapshot={getDashboardSnapshot()} />);
 
     await screen.findByTestId("queue-card-contract-clause");
 
@@ -226,7 +233,7 @@ describe("CommandCenter", () => {
   it("submits approval and advances to step 2", async () => {
     const user = userEvent.setup();
 
-    render(<CommandCenter snapshot={getDashboardSnapshot()} />);
+    renderWithI18n(<CommandCenter snapshot={getDashboardSnapshot()} />);
 
     await screen.findByTestId("queue-card-contract-clause");
 
@@ -244,7 +251,7 @@ describe("CommandCenter", () => {
   });
 
   it("Enter key triggers confirm on current step", async () => {
-    render(<CommandCenter snapshot={getDashboardSnapshot()} />);
+    renderWithI18n(<CommandCenter snapshot={getDashboardSnapshot()} />);
 
     await screen.findByTestId("queue-card-contract-clause");
 
@@ -262,7 +269,7 @@ describe("CommandCenter", () => {
   it("shows notification dot when item advances while not selected", async () => {
     const user = userEvent.setup();
 
-    render(<CommandCenter snapshot={getDashboardSnapshot()} />);
+    renderWithI18n(<CommandCenter snapshot={getDashboardSnapshot()} />);
 
     await screen.findByTestId("queue-card-contract-clause");
 
@@ -300,13 +307,13 @@ describe("CommandCenter", () => {
 
     vi.stubGlobal("fetch", bridgeFailureFetch);
 
-    render(<CommandCenter snapshot={getDashboardSnapshot()} />);
+    renderWithI18n(<CommandCenter snapshot={getDashboardSnapshot()} />);
 
     expect(await screen.findByTestId("queue-card-contract-clause")).toBeInTheDocument();
   });
 
   it("displays the step indicator with three steps", async () => {
-    render(<CommandCenter snapshot={getDashboardSnapshot()} />);
+    renderWithI18n(<CommandCenter snapshot={getDashboardSnapshot()} />);
 
     await screen.findByTestId("queue-card-contract-clause");
 
@@ -316,7 +323,7 @@ describe("CommandCenter", () => {
   });
 
   it("shows shortcut bar with hints", async () => {
-    render(<CommandCenter snapshot={getDashboardSnapshot()} />);
+    renderWithI18n(<CommandCenter snapshot={getDashboardSnapshot()} />);
 
     await screen.findByTestId("queue-card-contract-clause");
 
@@ -330,7 +337,7 @@ describe("CommandCenter", () => {
   it("shows inbox tabs and switches between them", async () => {
     const user = userEvent.setup();
 
-    render(<CommandCenter snapshot={getDashboardSnapshot()} />);
+    renderWithI18n(<CommandCenter snapshot={getDashboardSnapshot()} />);
 
     await screen.findByTestId("queue-card-contract-clause");
 
@@ -347,7 +354,7 @@ describe("CommandCenter", () => {
   });
 
   it("switches tabs with Left/Right arrow keys", async () => {
-    render(<CommandCenter snapshot={getDashboardSnapshot()} />);
+    renderWithI18n(<CommandCenter snapshot={getDashboardSnapshot()} />);
 
     await screen.findByTestId("queue-card-contract-clause");
 
