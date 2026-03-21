@@ -13,6 +13,7 @@ const ACTION_TO_STATUS: Record<OpenClawDecisionAction, NotificationStatus> = {
   ignore: "ignored",
   request_edit: "pending",
   confirm_execute: "executed",
+  cancel: "pending",
 };
 
 const MAX_TEXT_FIELD_CHARS = 2_000;
@@ -80,7 +81,8 @@ function isDecisionAction(value: unknown): value is OpenClawDecisionAction {
     value === "approve_plan" ||
     value === "ignore" ||
     value === "request_edit" ||
-    value === "confirm_execute"
+    value === "confirm_execute" ||
+    value === "cancel"
   );
 }
 
@@ -171,6 +173,16 @@ function buildDecisionBridgeEnvelope(
           decision: "confirm_execute",
           finalRecipients: params.finalRecipients || "",
           previewDraft: params.previewDraft || "",
+          source: params.source,
+          summary: params.summary,
+        },
+      };
+    case "cancel":
+      return {
+        type: "decision.cancelled",
+        payload: {
+          itemId: params.itemId,
+          decision: "cancel",
           source: params.source,
           summary: params.summary,
         },

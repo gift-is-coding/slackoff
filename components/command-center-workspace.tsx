@@ -25,9 +25,17 @@ type CommandCenterWorkspaceProps = {
   debugInput: string;
   debugHistory: DebugEntry[];
   isDebugSending: boolean;
+  // Undo window: non-null means the countdown is active
+  undoSecondsLeft: number | null;
+  // High-risk ignore pending: requires second I press
+  highRiskIgnorePending: boolean;
+  // Snooze: item is deferred to bottom of queue
+  isSnoozed: boolean;
   onApprovePlan: () => void;
   onIgnore: () => void;
+  onSnooze: () => void;
   onConfirmExecute: () => void;
+  onUndo: () => void;
   onCommandDraftChange: (value: string) => void;
   onToggleShortcutHelp: () => void;
   onCloseShortcutHelp: () => void;
@@ -38,9 +46,11 @@ type CommandCenterWorkspaceProps = {
 
 const getKeyboardShortcuts = (t: (key: string) => string) => [
   { key: "W / ↑", description: t("scUp") },
-  { key: "S / ↓", description: t("scDown") },
+  { key: "↓", description: t("scDown") },
   { key: "Y / Enter", description: t("scConfirm") },
   { key: "I", description: t("scIgnore") },
+  { key: "S", description: t("scSnooze") },
+  { key: "Z", description: t("scUndo") },
   { key: "/ :", description: t("scCommand") },
   { key: "F", description: t("scFocus") },
   { key: "?", description: t("scHelp") },
@@ -69,6 +79,20 @@ function slashModeLabel(draft: string, t: (key: string) => string) {
   return ">_";
 }
 
+function UndoBar({ secondsLeft, onUndo }: { secondsLeft: number; onUndo: () => void }) {
+  const { t } = useTranslation();
+  const pct = (secondsLeft / 5) * 100;
+  return (
+    <div className="undo-bar" aria-live="polite">
+      <div className="undo-progress" style={{ width: `${pct}%` }} />
+      <span className="undo-label">{secondsLeft}{t("undoCountdown")}</span>
+      <button className="action-button ignore" onClick={onUndo} type="button">
+        {t("undoBtn")}
+      </button>
+    </div>
+  );
+}
+
 function StepOnePlan({
   selectedItem,
   commandDraft,
@@ -76,8 +100,13 @@ function StepOnePlan({
   decisionReply,
   isBridgeSubmitting,
   slashInputRef,
+  undoSecondsLeft,
+  highRiskIgnorePending,
+  isSnoozed,
   onApprovePlan,
   onIgnore,
+  onSnooze,
+  onUndo,
   onCommandDraftChange,
 }: {
   selectedItem: WorkItem;
@@ -86,12 +115,20 @@ function StepOnePlan({
   decisionReply: string | null;
   isBridgeSubmitting: boolean;
   slashInputRef: RefObject<HTMLInputElement | null>;
+  undoSecondsLeft: number | null;
+  highRiskIgnorePending: boolean;
+  isSnoozed: boolean;
   onApprovePlan: () => void;
   onIgnore: () => void;
+  onSnooze: () => void;
+  onUndo: () => void;
   onCommandDraftChange: (value: string) => void;
 }) {
   const { t } = useTranslation();
   const isLowRisk = selectedItem.risk === "low";
+  const isHighRisk = selectedItem.risk === "high";
+  const isUndoActive = undoSecondsLeft !== null;
+  const snoozeLabel = isSnoozed ? `⏸ ${t("snoozed")}` : t("snoozeBtn");
   return (
     <div className="step-content">
       <article className="card">
@@ -103,6 +140,9 @@ function StepOnePlan({
             <span className="chip">act:{selectedItem.recommendedAction}</span>
           </div>
           <p className="source-message">{selectedItem.sourceMessage}</p>
+          {selectedItem.explanation ? (
+            <p className="explanation-text">▸ {selectedItem.explanation}</p>
+          ) : null}
         </div>
       </article>
 
@@ -118,31 +158,49 @@ function StepOnePlan({
             value={commandDraft}
           />
         </div>
-        {isLowRisk && (
+        {isLowRisk && !isUndoActive && (
           <p className="ignore-hint" aria-live="polite">
             {t("riskLowHint")} <strong>{t("riskLowKeyI")}</strong> {t("riskLowKeyOr")} <strong>{t("riskLowKeyEnter")}</strong> {t("riskLowSuffix")}
           </p>
         )}
-        <div className="action-strip">
-          <button
-            aria-keyshortcuts="Y"
-            className="action-button primary"
-            disabled={isBridgeSubmitting}
-            onClick={onApprovePlan}
-            type="button"
-          >
-            {t("btnApprovePlan")}
-          </button>
-          <button
-            aria-keyshortcuts="I"
-            className={`action-button ${isLowRisk ? "ignore-highlight" : "ignore"}`}
-            disabled={isBridgeSubmitting}
-            onClick={onIgnore}
-            type="button"
-          >
-            [<span className={isLowRisk ? "key-highlight" : undefined}>I</span>] {t("btnIgnore")}
-          </button>
-        </div>
+        {highRiskIgnorePending && (
+          <p className="high-risk-warning" aria-live="assertive">
+            {t("highRiskIgnoreWarning")}
+          </p>
+        )}
+        {isUndoActive ? (
+          <UndoBar onUndo={onUndo} secondsLeft={undoSecondsLeft!} />
+        ) : (
+          <div className="action-strip">
+            <button
+              aria-keyshortcuts="Y"
+              className="action-button primary"
+              disabled={isBridgeSubmitting}
+              onClick={onApprovePlan}
+              type="button"
+            >
+              {t("btnApprovePlan")}
+            </button>
+            <button
+              aria-keyshortcuts="I"
+              className={`action-button ${isLowRisk ? "ignore-highlight" : isHighRisk ? "ignore-danger" : "ignore"}`}
+              disabled={isBridgeSubmitting}
+              onClick={onIgnore}
+              type="button"
+            >
+              [<span className={isLowRisk ? "key-highlight" : undefined}>I</span>] {t("btnIgnore")}
+            </button>
+            <button
+              aria-keyshortcuts="S"
+              className={`action-button snooze${isSnoozed ? " snoozed" : ""}`}
+              disabled={isBridgeSubmitting}
+              onClick={onSnooze}
+              type="button"
+            >
+              {snoozeLabel}
+            </button>
+          </div>
+        )}
         <p aria-live="polite" className="bridge-notice">
           {bridgeNotice}
         </p>
@@ -163,8 +221,10 @@ function StepTwoExecute({
   decisionReply,
   isBridgeSubmitting,
   slashInputRef,
+  undoSecondsLeft,
   onConfirmExecute,
   onIgnore,
+  onUndo,
   onCommandDraftChange,
 }: {
   selectedItem: WorkItem;
@@ -173,11 +233,14 @@ function StepTwoExecute({
   decisionReply: string | null;
   isBridgeSubmitting: boolean;
   slashInputRef: RefObject<HTMLInputElement | null>;
+  undoSecondsLeft: number | null;
   onConfirmExecute: () => void;
   onIgnore: () => void;
+  onUndo: () => void;
   onCommandDraftChange: (value: string) => void;
 }) {
   const { t } = useTranslation();
+  const isUndoActive = undoSecondsLeft !== null;
   return (
     <div className="step-content">
       <article className="card">
@@ -193,7 +256,7 @@ function StepTwoExecute({
             <div className="window-message">
               <div className="message-body">
                 <p>{selectedItem.previewDraft}</p>
-                <p>{selectedItem.previewNote}</p>
+                {selectedItem.previewNote ? <p>{selectedItem.previewNote}</p> : null}
               </div>
             </div>
           </div>
@@ -213,26 +276,30 @@ function StepTwoExecute({
             value={commandDraft}
           />
         </div>
-        <div className="action-strip">
-          <button
-            aria-keyshortcuts="Y"
-            className="action-button primary"
-            disabled={isBridgeSubmitting}
-            onClick={onConfirmExecute}
-            type="button"
-          >
-            {t("btnConfirmExec")}
-          </button>
-          <button
-            aria-keyshortcuts="I"
-            className="action-button ignore"
-            disabled={isBridgeSubmitting}
-            onClick={onIgnore}
-            type="button"
-          >
-            [<span className="key-highlight">I</span>] {t("btnCancel")}
-          </button>
-        </div>
+        {isUndoActive ? (
+          <UndoBar onUndo={onUndo} secondsLeft={undoSecondsLeft!} />
+        ) : (
+          <div className="action-strip">
+            <button
+              aria-keyshortcuts="Y"
+              className="action-button primary"
+              disabled={isBridgeSubmitting}
+              onClick={onConfirmExecute}
+              type="button"
+            >
+              {t("btnConfirmExec")}
+            </button>
+            <button
+              aria-keyshortcuts="I"
+              className="action-button ignore"
+              disabled={isBridgeSubmitting}
+              onClick={onIgnore}
+              type="button"
+            >
+              [<span className="key-highlight">I</span>] {t("btnCancel")}
+            </button>
+          </div>
+        )}
         <p aria-live="polite" className="bridge-notice">
           {bridgeNotice}
         </p>
@@ -419,9 +486,14 @@ export function CommandCenterWorkspace({
   debugInput,
   debugHistory,
   isDebugSending,
+  undoSecondsLeft,
+  highRiskIgnorePending,
+  isSnoozed,
   onApprovePlan,
   onIgnore,
+  onSnooze,
   onConfirmExecute,
+  onUndo,
   onCommandDraftChange,
   onToggleShortcutHelp,
   onCloseShortcutHelp,
@@ -458,12 +530,17 @@ export function CommandCenterWorkspace({
                     bridgeNotice={bridgeNotice}
                     commandDraft={commandDraft}
                     decisionReply={decisionReply}
+                    highRiskIgnorePending={highRiskIgnorePending}
                     isBridgeSubmitting={isBridgeSubmitting}
+                    isSnoozed={isSnoozed}
                     onApprovePlan={onApprovePlan}
                     onCommandDraftChange={onCommandDraftChange}
                     onIgnore={onIgnore}
+                    onSnooze={onSnooze}
+                    onUndo={onUndo}
                     selectedItem={selectedItem}
                     slashInputRef={slashInputRef}
+                    undoSecondsLeft={undoSecondsLeft}
                   />
                 )}
 
@@ -476,8 +553,10 @@ export function CommandCenterWorkspace({
                     onCommandDraftChange={onCommandDraftChange}
                     onConfirmExecute={onConfirmExecute}
                     onIgnore={onIgnore}
+                    onUndo={onUndo}
                     selectedItem={selectedItem}
                     slashInputRef={slashInputRef}
+                    undoSecondsLeft={undoSecondsLeft}
                   />
                 )}
 

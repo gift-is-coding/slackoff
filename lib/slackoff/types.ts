@@ -120,7 +120,8 @@ export type OpenClawDecisionAction =
   | "approve_plan"
   | "ignore"
   | "request_edit"
-  | "confirm_execute";
+  | "confirm_execute"
+  | "cancel";
 
 export type OpenClawDecisionBridgeResult = {
   ok: boolean;

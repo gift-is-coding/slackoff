@@ -1,5 +1,8 @@
 import type { Priority, WorkItem } from "@/lib/slackoff/types";
 
+/** WorkItem augmented with a group badge count (how many items share the same channel). */
+export type GroupedWorkItem = WorkItem & { groupCount: number };
+
 export const FOCUS_PRIORITIES: Priority[] = ["P0", "P1"];
 
 const priorityLookup = new Set<Priority>(FOCUS_PRIORITIES);
@@ -81,6 +84,29 @@ export function filterWorkItems(
 
     return matchesCommandQuery(item, query);
   });
+}
+
+/**
+ * Collapse items from the same channel into a single representative card.
+ * The first item encountered for each channel becomes the representative;
+ * subsequent items from the same channel increment its groupCount.
+ */
+export function groupByChannel(items: WorkItem[]): GroupedWorkItem[] {
+  const channelFirst = new Map<string, GroupedWorkItem>();
+  const result: GroupedWorkItem[] = [];
+
+  for (const item of items) {
+    const existing = channelFirst.get(item.channel);
+    if (existing) {
+      existing.groupCount++;
+    } else {
+      const grouped: GroupedWorkItem = { ...item, groupCount: 1 };
+      channelFirst.set(item.channel, grouped);
+      result.push(grouped);
+    }
+  }
+
+  return result;
 }
 
 export function getAdjacentItemId(

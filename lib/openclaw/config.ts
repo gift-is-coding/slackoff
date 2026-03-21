@@ -34,8 +34,27 @@ function normalizeGatewayUrl(port: number) {
 
 export async function readLocalGatewayConfig(): Promise<LocalGatewayConfig> {
   const configPath = process.env.OPENCLAW_CONFIG_PATH?.trim() || getDefaultConfigPath();
-  const file = await readFile(configPath, "utf8");
-  const parsed = JSON.parse(file) as RawOpenClawConfig;
+  let file: string;
+  try {
+    file = await readFile(configPath, "utf8");
+  } catch (cause) {
+    throw new Error(
+      `Cannot read OpenClaw config at "${configPath}". ` +
+        `Make sure OpenClaw is installed and has been initialised (run "openclaw" once to create the config). ` +
+        `You can override the path with the OPENCLAW_CONFIG_PATH environment variable.`,
+      { cause },
+    );
+  }
+  let parsed: RawOpenClawConfig;
+  try {
+    parsed = JSON.parse(file) as RawOpenClawConfig;
+  } catch (cause) {
+    throw new Error(
+      `OpenClaw config at "${configPath}" is not valid JSON. ` +
+        `Try removing and re-initialising it, or fix the syntax manually.`,
+      { cause },
+    );
+  }
   const port = parsed.gateway?.port ?? DEFAULT_GATEWAY_PORT;
   const bindMode = parsed.gateway?.bind ?? "loopback";
   const authMode = parsed.gateway?.auth?.mode ?? "token";

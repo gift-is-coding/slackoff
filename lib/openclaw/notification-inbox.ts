@@ -21,9 +21,18 @@ export type NotificationItem = {
   created_at: string;
   updated_at: string;
   notes: string;
+  // Fields written by OpenClaw's AI analysis
   ai_reply?: string;
   execution_plan?: string;
   screenshot_url?: string;
+  // Optional enrichment fields — when present, used directly instead of being inferred
+  priority?: string;           // "P0" | "P1" | "P2" | "P3"
+  risk?: string;               // "low" | "medium" | "high"
+  explanation?: string;        // why this item matters / reasoning
+  recommended_action?: string; // what the user should do
+  final_recipients?: string;   // who the reply should go to
+  preview_note?: string;       // extra context shown in the exec preview
+  owner?: string;              // the contact/person involved
 };
 
 type NotificationInbox = {

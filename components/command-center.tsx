@@ -15,6 +15,8 @@ import { useTranslation } from "@/lib/i18n/context";
 import {
   filterWorkItems,
   getAdjacentItemId,
+  groupByChannel,
+  type GroupedWorkItem,
 } from "@/lib/slackoff/command-center";
 import type {
   DashboardSnapshot,
@@ -133,7 +135,13 @@ export function CommandCenter({ snapshot }: CommandCenterProps) {
     snapshot.selectedItemId,
   );
   const [query, setQuery] = useState("");
-  const [showFocusOnly, setShowFocusOnly] = useState(false);
+  const [showFocusOnly, setShowFocusOnly] = useState(() => {
+    try {
+      return localStorage.getItem("slackoff_focus_only") === "true";
+    } catch {
+      return false;
+    }
+  });
   const [showShortcutHelp, setShowShortcutHelp] = useState(false);
   const [itemSteps, setItemSteps] = useState<Map<string, ItemStepState>>(
     () => new Map(),
@@ -160,15 +168,34 @@ export function CommandCenter({ snapshot }: CommandCenterProps) {
   const [decisionReply, setDecisionReply] = useState<string | null>(null);
   const [isBridgeSubmitting, setIsBridgeSubmitting] = useState(false);
 
+  // Undo window: 5-second countdown after approve_plan / confirm_execute
+  const [undoWindow, setUndoWindow] = useState<{ itemId: string; targetStep: ItemStep } | null>(null);
+  const [undoSecondsLeft, setUndoSecondsLeft] = useState(0);
+
+  // High-risk ignore: requires a second I press to confirm
+  const [highRiskIgnorePending, setHighRiskIgnorePending] = useState(false);
+
+  // Snooze: client-side set; snoozed items are sorted to the bottom of the queue
+  const [snoozedIds, setSnoozedIds] = useState<Set<string>>(() => {
+    try {
+      const saved = localStorage.getItem("slackoff_snoozed");
+      return saved ? new Set(JSON.parse(saved) as string[]) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
+
   const slashInputRef = useRef<HTMLInputElement>(null);
   const queueListRef = useRef<HTMLUListElement>(null);
   const deferredQuery = useDeferredValue(query);
   const sourceItems = activeTab === "pending" ? items : processedItems;
-  const visibleItems = filterWorkItems(
-    sourceItems,
-    deferredQuery,
-    showFocusOnly,
+  const filteredItems = filterWorkItems(sourceItems, deferredQuery, showFocusOnly);
+  // Snoozed items are sorted to the bottom so normal items always get first attention
+  const visibleItems = [...filteredItems].sort(
+    (a, b) => Number(snoozedIds.has(a.id)) - Number(snoozedIds.has(b.id)),
   );
+  // Collapse same-channel items into one representative card (with a +N badge)
+  const groupedVisibleItems = groupByChannel(visibleItems);
   const selectedItem =
     visibleItems.find((item) => item.id === selectedItemId) ??
     visibleItems[0] ??
@@ -223,7 +250,41 @@ export function CommandCenter({ snapshot }: CommandCenterProps) {
         }),
       );
     }
+    // Cancel any pending high-risk ignore when selection changes
+    setHighRiskIgnorePending(false);
   }, [selectedItemId]);
+
+  // Persist filter + snooze state across page refreshes
+  useEffect(() => {
+    try {
+      localStorage.setItem("slackoff_focus_only", String(showFocusOnly));
+    } catch { /* storage unavailable */ }
+  }, [showFocusOnly]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("slackoff_snoozed", JSON.stringify([...snoozedIds]));
+    } catch { /* storage unavailable */ }
+  }, [snoozedIds]);
+
+  // Count down the undo window; advance step when it reaches zero
+  useEffect(() => {
+    if (!undoWindow) return;
+
+    if (undoSecondsLeft <= 0) {
+      advanceStep(undoWindow.itemId, undoWindow.targetStep);
+      setUndoWindow(null);
+      return;
+    }
+
+    const timerId = window.setTimeout(() => {
+      setUndoSecondsLeft((s) => s - 1);
+    }, 1000);
+
+    return () => window.clearTimeout(timerId);
+    // advanceStep reads selectedItemId via closure — stable across re-renders for our purposes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [undoWindow, undoSecondsLeft]);
 
   const switchTab = useCallback(
     (tab: InboxTab) => {
@@ -327,8 +388,9 @@ export function CommandCenter({ snapshot }: CommandCenterProps) {
         if (isItemsPayload(processedPayload)) {
           setProcessedItems(processedPayload.items);
         }
-      } catch {
-        // Silently fail — the next poll will retry.
+      } catch (err) {
+        // Non-blocking — the next poll will retry automatically.
+        console.error("[CommandCenter] Failed to load items:", err);
       } finally {
         setItemsLoading(false);
       }
@@ -534,23 +596,59 @@ export function CommandCenter({ snapshot }: CommandCenterProps) {
   }
 
   async function handleApprovePlan() {
+    const targetItem = selectedItem;
     const succeeded = await submitDecision({
       action: "approve_plan",
       successLabel: t("bridgePlanLabel"),
     });
 
-    if (succeeded && selectedItem) {
-      advanceStep(selectedItem.id, "step2");
+    if (succeeded && targetItem) {
+      setUndoWindow({ itemId: targetItem.id, targetStep: "step2" });
+      setUndoSecondsLeft(5);
     }
+  }
+
+  async function handleUndo() {
+    if (!undoWindow || !selectedItem) return;
+
+    const itemId = undoWindow.itemId;
+    setUndoWindow(null);
+    setUndoSecondsLeft(0);
+
+    // Revert status server-side
+    fetch("/api/openclaw/decision", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "cancel",
+        itemId,
+        source: selectedItem.source,
+        summary: selectedItem.summary,
+      }),
+    })
+      .then(() => refreshItems())
+      .catch((err: unknown) => {
+        console.error("[CommandCenter] Undo cancel request failed:", err);
+      });
+
+    setBridgeNotice(t("undoCancelled"));
+    setDecisionReply(null);
   }
 
   async function handleIgnore() {
     if (!selectedItem) return;
 
+    // High-risk guard: require a second I press to confirm
+    if (selectedItem.risk === "high" && !highRiskIgnorePending) {
+      setHighRiskIgnorePending(true);
+      return;
+    }
+    setHighRiskIgnorePending(false);
+
     const ignoredItem = selectedItem;
 
     // Find the next item BEFORE removing
-    const nextId = getAdjacentItemId(visibleItems, selectedItemId, 1);
+    const nextId = getAdjacentItemId(groupedVisibleItems, selectedItemId, 1);
 
     // Optimistically remove the item from the local state immediately
     setItems((current) => current.filter((item) => item.id !== ignoredItem.id));
@@ -578,20 +676,39 @@ export function CommandCenter({ snapshot }: CommandCenterProps) {
       }),
     })
       .then(() => refreshItems())
-      .catch(() => {
-        // Silently fail — the item is already removed optimistically,
-        // and the server-side status was already written by the API.
+      .catch((err: unknown) => {
+        // Item is already removed optimistically from the UI; log for debuggability.
+        console.error("[CommandCenter] Background ignore decision failed:", err);
       });
   }
 
+  function handleSnooze() {
+    if (!selectedItem) return;
+    const id = selectedItem.id;
+    setSnoozedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id); // un-snooze
+      } else {
+        next.add(id);
+        // Move selection to next non-snoozed item
+        const nextId = visibleItems.find((item) => item.id !== id && !next.has(item.id))?.id;
+        if (nextId) setSelectedItemId(nextId);
+      }
+      return next;
+    });
+  }
+
   async function handleConfirmExecute() {
+    const targetItem = selectedItem;
     const succeeded = await submitDecision({
       action: "confirm_execute",
       successLabel: t("bridgeExecLabel"),
     });
 
-    if (succeeded && selectedItem) {
-      advanceStep(selectedItem.id, "step3");
+    if (succeeded && targetItem) {
+      setUndoWindow({ itemId: targetItem.id, targetStep: "step3" });
+      setUndoSecondsLeft(5);
     }
   }
 
@@ -612,6 +729,12 @@ export function CommandCenter({ snapshot }: CommandCenterProps) {
       if (showShortcutHelp) {
         event.preventDefault();
         setShowShortcutHelp(false);
+      }
+
+      if (highRiskIgnorePending) {
+        event.preventDefault();
+        setHighRiskIgnorePending(false);
+        return;
       }
 
       if (document.activeElement instanceof HTMLElement) {
@@ -686,16 +809,16 @@ export function CommandCenter({ snapshot }: CommandCenterProps) {
 
     if (event.key.toLowerCase() === "w" || event.key === "ArrowUp") {
       event.preventDefault();
-      const nextId = getAdjacentItemId(visibleItems, selectedItemId, -1);
+      const nextId = getAdjacentItemId(groupedVisibleItems, selectedItemId, -1);
       if (nextId) {
         handleSelectItem(nextId);
       }
       return;
     }
 
-    if (event.key.toLowerCase() === "s" || event.key === "ArrowDown") {
+    if (event.key === "ArrowDown") {
       event.preventDefault();
-      const nextId = getAdjacentItemId(visibleItems, selectedItemId, 1);
+      const nextId = getAdjacentItemId(groupedVisibleItems, selectedItemId, 1);
       if (nextId) {
         handleSelectItem(nextId);
       }
@@ -703,6 +826,18 @@ export function CommandCenter({ snapshot }: CommandCenterProps) {
     }
 
     if (isBridgeSubmitting || !selectedItem || isProcessedTab) {
+      return;
+    }
+
+    if (event.key.toLowerCase() === "z" && undoWindow) {
+      event.preventDefault();
+      void handleUndo();
+      return;
+    }
+
+    if (event.key.toLowerCase() === "s") {
+      event.preventDefault();
+      handleSnooze();
       return;
     }
 
@@ -751,6 +886,14 @@ export function CommandCenter({ snapshot }: CommandCenterProps) {
             </div>
           </header>
 
+          <div className="status-chips" aria-label="Status summary">
+            <span className="status-chip">{items.length} {t("statusPending")}</span>
+            <span className="status-chip chip-focus">
+              {items.filter((i) => i.priority === "P0" || i.priority === "P1").length} {t("statusFocus")}
+            </span>
+            <span className="status-chip chip-done">{processedItems.length} {t("statusProcessed")}</span>
+          </div>
+
           <div className="inbox-tabs" role="tablist" aria-label="Inbox tabs">
             <button
               aria-selected={activeTab === "pending"}
@@ -790,15 +933,15 @@ export function CommandCenter({ snapshot }: CommandCenterProps) {
             />
           </div>
 
-          {visibleItems.length > 0 ? (
+          {groupedVisibleItems.length > 0 ? (
             <ul className="queue-list" ref={queueListRef}>
-              {visibleItems.map((item) => {
+              {groupedVisibleItems.map((item: GroupedWorkItem) => {
                 const stepState = getItemStep(itemSteps, item.id);
                 return (
                   <li key={item.id}>
                     <button
                       aria-pressed={item.id === selectedItem?.id}
-                      className={`queue-card ${item.id === selectedItem?.id ? "active" : ""}`}
+                      className={`queue-card ${item.id === selectedItem?.id ? "active" : ""} ${snoozedIds.has(item.id) ? "snoozed" : ""}`}
                       data-testid={`queue-card-${item.id}`}
                       onClick={() => handleSelectItem(item.id)}
                       type="button"
@@ -816,7 +959,15 @@ export function CommandCenter({ snapshot }: CommandCenterProps) {
                               data-testid={`notif-dot-${item.id}`}
                             />
                           )}
+                          {snoozedIds.has(item.id) && (
+                            <span className="snooze-badge" title={t("snoozed")}>⏸ </span>
+                          )}
                           {item.channel}
+                          {item.groupCount > 1 && (
+                            <span className="group-badge" title={`${item.groupCount} messages from this channel`}>
+                              {" "}[+{item.groupCount - 1}]
+                            </span>
+                          )}
                         </span>
                       </div>
                       <p className="queue-title">{item.summary}</p>
@@ -876,20 +1027,25 @@ export function CommandCenter({ snapshot }: CommandCenterProps) {
             debugHistory={debugHistory}
             debugInput={debugInput}
             decisionReply={decisionReply}
+            highRiskIgnorePending={highRiskIgnorePending}
             isBridgeSubmitting={isBridgeSubmitting}
             isDebugOpen={isDebugOpen}
             isDebugSending={isDebugSending}
             isReadOnly={isProcessedTab}
+            isSnoozed={selectedItem ? snoozedIds.has(selectedItem.id) : false}
             onApprovePlan={() => void handleApprovePlan()}
             onCommandDraftChange={handleCommandDraftChange}
             onConfirmExecute={() => void handleConfirmExecute()}
             onDebugInputChange={setDebugInput}
             onDebugSend={(msg) => void handleDebugSend(msg)}
             onIgnore={() => void handleIgnore()}
+            onSnooze={handleSnooze}
             onToggleDebug={() => setIsDebugOpen((prev) => !prev)}
+            onUndo={() => void handleUndo()}
             selectedItem={selectedItem}
             showShortcutHelp={showShortcutHelp}
             slashInputRef={slashInputRef}
+            undoSecondsLeft={undoWindow ? undoSecondsLeft : null}
             onToggleShortcutHelp={() =>
               setShowShortcutHelp((current) => !current)
             }
