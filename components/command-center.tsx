@@ -167,14 +167,17 @@ export function CommandCenter({ snapshot }: CommandCenterProps) {
   // High-risk ignore: requires a second I press to confirm
   const [highRiskIgnorePending, setHighRiskIgnorePending] = useState(false);
 
+  // Snooze: client-side set; snoozed items are sorted to the bottom of the queue
+  const [snoozedIds, setSnoozedIds] = useState<Set<string>>(() => new Set());
+
   const slashInputRef = useRef<HTMLInputElement>(null);
   const queueListRef = useRef<HTMLUListElement>(null);
   const deferredQuery = useDeferredValue(query);
   const sourceItems = activeTab === "pending" ? items : processedItems;
-  const visibleItems = filterWorkItems(
-    sourceItems,
-    deferredQuery,
-    showFocusOnly,
+  const filteredItems = filterWorkItems(sourceItems, deferredQuery, showFocusOnly);
+  // Snoozed items are sorted to the bottom so normal items always get first attention
+  const visibleItems = [...filteredItems].sort(
+    (a, b) => Number(snoozedIds.has(a.id)) - Number(snoozedIds.has(b.id)),
   );
   const selectedItem =
     visibleItems.find((item) => item.id === selectedItemId) ??
@@ -649,6 +652,23 @@ export function CommandCenter({ snapshot }: CommandCenterProps) {
       });
   }
 
+  function handleSnooze() {
+    if (!selectedItem) return;
+    const id = selectedItem.id;
+    setSnoozedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id); // un-snooze
+      } else {
+        next.add(id);
+        // Move selection to next non-snoozed item
+        const nextId = visibleItems.find((item) => item.id !== id && !next.has(item.id))?.id;
+        if (nextId) setSelectedItemId(nextId);
+      }
+      return next;
+    });
+  }
+
   async function handleConfirmExecute() {
     const targetItem = selectedItem;
     const succeeded = await submitDecision({
@@ -785,6 +805,12 @@ export function CommandCenter({ snapshot }: CommandCenterProps) {
       return;
     }
 
+    if (event.key.toLowerCase() === "n") {
+      event.preventDefault();
+      handleSnooze();
+      return;
+    }
+
     if (event.key === "Enter" || event.key.toLowerCase() === "y") {
       event.preventDefault();
       handleConfirmCurrentStep();
@@ -829,6 +855,14 @@ export function CommandCenter({ snapshot }: CommandCenterProps) {
             </button>
             </div>
           </header>
+
+          <div className="status-chips" aria-label="Status summary">
+            <span className="status-chip">{items.length} {t("statusPending")}</span>
+            <span className="status-chip chip-focus">
+              {items.filter((i) => i.priority === "P0" || i.priority === "P1").length} {t("statusFocus")}
+            </span>
+            <span className="status-chip chip-done">{processedItems.length} {t("statusProcessed")}</span>
+          </div>
 
           <div className="inbox-tabs" role="tablist" aria-label="Inbox tabs">
             <button
@@ -877,7 +911,7 @@ export function CommandCenter({ snapshot }: CommandCenterProps) {
                   <li key={item.id}>
                     <button
                       aria-pressed={item.id === selectedItem?.id}
-                      className={`queue-card ${item.id === selectedItem?.id ? "active" : ""}`}
+                      className={`queue-card ${item.id === selectedItem?.id ? "active" : ""} ${snoozedIds.has(item.id) ? "snoozed" : ""}`}
                       data-testid={`queue-card-${item.id}`}
                       onClick={() => handleSelectItem(item.id)}
                       type="button"
@@ -894,6 +928,9 @@ export function CommandCenter({ snapshot }: CommandCenterProps) {
                               className="notification-dot"
                               data-testid={`notif-dot-${item.id}`}
                             />
+                          )}
+                          {snoozedIds.has(item.id) && (
+                            <span className="snooze-badge" title={t("snoozed")}>⏸ </span>
                           )}
                           {item.channel}
                         </span>
@@ -960,12 +997,14 @@ export function CommandCenter({ snapshot }: CommandCenterProps) {
             isDebugOpen={isDebugOpen}
             isDebugSending={isDebugSending}
             isReadOnly={isProcessedTab}
+            isSnoozed={selectedItem ? snoozedIds.has(selectedItem.id) : false}
             onApprovePlan={() => void handleApprovePlan()}
             onCommandDraftChange={handleCommandDraftChange}
             onConfirmExecute={() => void handleConfirmExecute()}
             onDebugInputChange={setDebugInput}
             onDebugSend={(msg) => void handleDebugSend(msg)}
             onIgnore={() => void handleIgnore()}
+            onSnooze={handleSnooze}
             onToggleDebug={() => setIsDebugOpen((prev) => !prev)}
             onUndo={() => void handleUndo()}
             selectedItem={selectedItem}

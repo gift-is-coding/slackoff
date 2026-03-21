@@ -63,6 +63,14 @@ export const dict = {
 
     highRiskIgnoreWarning: "⚠ 风险较高 — 再按一次 [I] 确认忽略，或按 [Esc] 取消",
 
+    snoozeBtn: "[N] 稍后",
+    snoozed: "已缓",
+    scSnooze: "缓处理",
+    scUndo: "撤销",
+    statusPending: "待处理",
+    statusFocus: "P0/P1",
+    statusProcessed: "已处理",
+
     switchLang: "English",
   },
   en: {
@@ -126,6 +134,14 @@ export const dict = {
     undoCancelled: "Cancelled — item restored to pending.",
 
     highRiskIgnoreWarning: "⚠ High risk — press [I] again to confirm ignore, or [Esc] to cancel",
+
+    snoozeBtn: "[N] Snooze",
+    snoozed: "snoozed",
+    scSnooze: "Snooze",
+    scUndo: "Undo",
+    statusPending: "pending",
+    statusFocus: "P0/P1",
+    statusProcessed: "processed",
 
     switchLang: "中文",
   },

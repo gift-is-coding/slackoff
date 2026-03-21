@@ -29,8 +29,11 @@ type CommandCenterWorkspaceProps = {
   undoSecondsLeft: number | null;
   // High-risk ignore pending: requires second I press
   highRiskIgnorePending: boolean;
+  // Snooze: item is deferred to bottom of queue
+  isSnoozed: boolean;
   onApprovePlan: () => void;
   onIgnore: () => void;
+  onSnooze: () => void;
   onConfirmExecute: () => void;
   onUndo: () => void;
   onCommandDraftChange: (value: string) => void;
@@ -46,6 +49,8 @@ const getKeyboardShortcuts = (t: (key: string) => string) => [
   { key: "S / ↓", description: t("scDown") },
   { key: "Y / Enter", description: t("scConfirm") },
   { key: "I", description: t("scIgnore") },
+  { key: "N", description: t("scSnooze") },
+  { key: "Z", description: t("scUndo") },
   { key: "/ :", description: t("scCommand") },
   { key: "F", description: t("scFocus") },
   { key: "?", description: t("scHelp") },
@@ -97,8 +102,10 @@ function StepOnePlan({
   slashInputRef,
   undoSecondsLeft,
   highRiskIgnorePending,
+  isSnoozed,
   onApprovePlan,
   onIgnore,
+  onSnooze,
   onUndo,
   onCommandDraftChange,
 }: {
@@ -110,8 +117,10 @@ function StepOnePlan({
   slashInputRef: RefObject<HTMLInputElement | null>;
   undoSecondsLeft: number | null;
   highRiskIgnorePending: boolean;
+  isSnoozed: boolean;
   onApprovePlan: () => void;
   onIgnore: () => void;
+  onSnooze: () => void;
   onUndo: () => void;
   onCommandDraftChange: (value: string) => void;
 }) {
@@ -119,6 +128,7 @@ function StepOnePlan({
   const isLowRisk = selectedItem.risk === "low";
   const isHighRisk = selectedItem.risk === "high";
   const isUndoActive = undoSecondsLeft !== null;
+  const snoozeLabel = isSnoozed ? `⏸ ${t("snoozed")}` : t("snoozeBtn");
   return (
     <div className="step-content">
       <article className="card">
@@ -179,6 +189,15 @@ function StepOnePlan({
               type="button"
             >
               [<span className={isLowRisk ? "key-highlight" : undefined}>I</span>] {t("btnIgnore")}
+            </button>
+            <button
+              aria-keyshortcuts="N"
+              className={`action-button snooze${isSnoozed ? " snoozed" : ""}`}
+              disabled={isBridgeSubmitting}
+              onClick={onSnooze}
+              type="button"
+            >
+              {snoozeLabel}
             </button>
           </div>
         )}
@@ -469,8 +488,10 @@ export function CommandCenterWorkspace({
   isDebugSending,
   undoSecondsLeft,
   highRiskIgnorePending,
+  isSnoozed,
   onApprovePlan,
   onIgnore,
+  onSnooze,
   onConfirmExecute,
   onUndo,
   onCommandDraftChange,
@@ -511,9 +532,11 @@ export function CommandCenterWorkspace({
                     decisionReply={decisionReply}
                     highRiskIgnorePending={highRiskIgnorePending}
                     isBridgeSubmitting={isBridgeSubmitting}
+                    isSnoozed={isSnoozed}
                     onApprovePlan={onApprovePlan}
                     onCommandDraftChange={onCommandDraftChange}
                     onIgnore={onIgnore}
+                    onSnooze={onSnooze}
                     onUndo={onUndo}
                     selectedItem={selectedItem}
                     slashInputRef={slashInputRef}
