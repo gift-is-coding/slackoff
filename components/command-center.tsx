@@ -786,7 +786,7 @@ export function CommandCenter({ snapshot }: CommandCenterProps) {
       return;
     }
 
-    if (event.key.toLowerCase() === "s" || event.key === "ArrowDown") {
+    if (event.key === "ArrowDown") {
       event.preventDefault();
       const nextId = getAdjacentItemId(visibleItems, selectedItemId, 1);
       if (nextId) {
@@ -805,7 +805,7 @@ export function CommandCenter({ snapshot }: CommandCenterProps) {
       return;
     }
 
-    if (event.key.toLowerCase() === "n") {
+    if (event.key.toLowerCase() === "s") {
       event.preventDefault();
       handleSnooze();
       return;

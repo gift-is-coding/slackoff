@@ -46,10 +46,10 @@ type CommandCenterWorkspaceProps = {
 
 const getKeyboardShortcuts = (t: (key: string) => string) => [
   { key: "W / ↑", description: t("scUp") },
-  { key: "S / ↓", description: t("scDown") },
+  { key: "↓", description: t("scDown") },
   { key: "Y / Enter", description: t("scConfirm") },
   { key: "I", description: t("scIgnore") },
-  { key: "N", description: t("scSnooze") },
+  { key: "S", description: t("scSnooze") },
   { key: "Z", description: t("scUndo") },
   { key: "/ :", description: t("scCommand") },
   { key: "F", description: t("scFocus") },
@@ -191,7 +191,7 @@ function StepOnePlan({
               [<span className={isLowRisk ? "key-highlight" : undefined}>I</span>] {t("btnIgnore")}
             </button>
             <button
-              aria-keyshortcuts="N"
+              aria-keyshortcuts="S"
               className={`action-button snooze${isSnoozed ? " snoozed" : ""}`}
               disabled={isBridgeSubmitting}
               onClick={onSnooze}

@@ -63,7 +63,7 @@ export const dict = {
 
     highRiskIgnoreWarning: "⚠ 风险较高 — 再按一次 [I] 确认忽略，或按 [Esc] 取消",
 
-    snoozeBtn: "[N] 稍后",
+    snoozeBtn: "[S] 稍后",
     snoozed: "已缓",
     scSnooze: "缓处理",
     scUndo: "撤销",
@@ -135,7 +135,7 @@ export const dict = {
 
     highRiskIgnoreWarning: "⚠ High risk — press [I] again to confirm ignore, or [Esc] to cancel",
 
-    snoozeBtn: "[N] Snooze",
+    snoozeBtn: "[S] Snooze",
     snoozed: "snoozed",
     scSnooze: "Snooze",
     scUndo: "Undo",
