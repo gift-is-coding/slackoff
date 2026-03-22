@@ -13,7 +13,8 @@ services:
         required: false
     environment:
       - NODE_ENV=production
-    # The container needs host networking on Linux to reach ws://127.0.0.1:18789.
-    # On macOS/Windows use host.docker.internal and set OPENCLAW_GATEWAY_URL instead.
+    # Linux: host networking lets the container reach ws://127.0.0.1:18789 directly.
+    # macOS / Windows: remove `network_mode: host` and set the env var instead:
+    #   OPENCLAW_GATEWAY_URL=ws://host.docker.internal:18789
     network_mode: host
     restart: unless-stopped

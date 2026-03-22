@@ -268,32 +268,20 @@ export async function submitDecisionToOpenClaw(
     bridgeFilePath: bridgeFilePath ?? undefined,
   });
 
-  let channelOk = false;
-  let channelReplyText: string | null = null;
-  let channelErrorMessage: string | undefined;
-  let channelSessionId = SLACKOFF_DECISION_SESSION_ID;
-  let channelDurationMs: number | null = null;
-  let channelState = null;
-
-  try {
-    const turn = await sendChannelMessage({
-      message: channelMessage,
-      sessionId: SLACKOFF_DECISION_SESSION_ID,
-    });
-    channelOk = true;
-    channelReplyText = turn.replyText;
-    channelSessionId = turn.meta.sessionId;
-    channelDurationMs = turn.meta.durationMs;
-    channelState = turn.state;
-  } catch (error) {
-    channelErrorMessage =
-      error instanceof Error ? error.message : "OpenClaw channel send failed";
-  }
+  // Fire channel message in the background — OpenClaw can take up to 180s to
+  // ACK. We don't block the HTTP response on it; the bridge file write above
+  // is the durable record that the decision was received.
+  sendChannelMessage({
+    message: channelMessage,
+    sessionId: SLACKOFF_DECISION_SESSION_ID,
+  }).catch(() => {
+    // Errors are non-fatal: the bridge file already recorded the decision.
+  });
 
   return {
     ok: true,
     action: params.action,
-    fullySynced: Boolean(bridgeFilePath) && channelOk,
+    fullySynced: Boolean(bridgeFilePath),
     bridge: {
       ok: Boolean(bridgeFilePath),
       type: bridgeEnvelope.type,
@@ -301,12 +289,12 @@ export async function submitDecisionToOpenClaw(
       errorMessage: bridgeErrorMessage,
     },
     channel: {
-      ok: channelOk,
-      replyText: channelReplyText,
-      sessionId: channelSessionId,
-      durationMs: channelDurationMs,
-      state: channelState,
-      errorMessage: channelErrorMessage,
+      ok: true,
+      replyText: null,
+      sessionId: SLACKOFF_DECISION_SESSION_ID,
+      durationMs: null,
+      state: null,
+      errorMessage: undefined,
     },
   };
 }

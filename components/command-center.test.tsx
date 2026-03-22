@@ -202,6 +202,7 @@ describe("CommandCenter", () => {
   afterEach(() => {
     vi.clearAllMocks();
     vi.unstubAllGlobals();
+    localStorage.clear();
   });
 
   it("filters queue cards from the search box", async () => {
@@ -366,5 +367,191 @@ describe("CommandCenter", () => {
 
     fireEvent.keyDown(window, { key: "ArrowLeft" });
     expect(screen.getByRole("tab", { name: /待处理/ })).toHaveAttribute("aria-selected", "true");
+  });
+
+  // ── Undo window ─────────────────────────────────────────────────────────────
+
+  it("Z key cancels the undo window and restores bridgeNotice", async () => {
+    renderWithI18n(<CommandCenter snapshot={getDashboardSnapshot()} />);
+
+    await screen.findByTestId("queue-card-contract-clause");
+
+    // Approve to open the undo window
+    fireEvent.keyDown(window, { key: "Enter" });
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /\[Z\]/ })).toBeInTheDocument();
+    });
+
+    // Cancel via Z key
+    fireEvent.keyDown(window, { key: "z" });
+
+    await waitFor(() => {
+      expect(screen.queryByRole("button", { name: /\[Z\]/ })).not.toBeInTheDocument();
+    });
+
+    // bridgeNotice should show the cancelled message
+    expect(screen.getByText(/已撤销/)).toBeInTheDocument();
+  });
+
+  it("clicking the undo button cancels the undo window", async () => {
+    const user = userEvent.setup();
+
+    renderWithI18n(<CommandCenter snapshot={getDashboardSnapshot()} />);
+
+    await screen.findByTestId("queue-card-contract-clause");
+
+    await user.click(screen.getByRole("button", { name: /Y.*确认方案/ }));
+
+    const undoBtn = await screen.findByRole("button", { name: /\[Z\]/ });
+    await user.click(undoBtn);
+
+    await waitFor(() => {
+      expect(screen.queryByRole("button", { name: /\[Z\]/ })).not.toBeInTheDocument();
+    });
+
+    expect(screen.getByText(/已撤销/)).toBeInTheDocument();
+  });
+
+  // ── High-risk double-confirm ─────────────────────────────────────────────────
+
+  it("high-risk item requires second ignore click to confirm", async () => {
+    const user = userEvent.setup();
+
+    // After an ignore decision, items refresh should no longer include contract-clause
+    const itemsAfterIgnore = testWorkItems.filter((i) => i.id !== "contract-clause");
+    let decisionPosted = false;
+    vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes("/api/openclaw/items") && decisionPosted) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ items: itemsAfterIgnore, fetchedAt: new Date().toISOString(), count: itemsAfterIgnore.length }),
+        });
+      }
+      if (url.includes("/api/openclaw/decision") && init?.method === "POST") {
+        decisionPosted = true;
+      }
+      return mockFetch(input, init);
+    });
+
+    renderWithI18n(<CommandCenter snapshot={getDashboardSnapshot()} />);
+
+    await screen.findByRole("button", { name: /Y.*确认方案/ });
+
+    // contract-clause is risk:high — first click shows warning
+    const ignoreBtn = screen.getByRole("button", { name: /忽略/ });
+    await user.click(ignoreBtn);
+
+    await waitFor(() => {
+      expect(screen.getByText(/再按一次/)).toBeInTheDocument();
+    });
+
+    // Item is still in the queue
+    expect(screen.getByTestId("queue-card-contract-clause")).toBeInTheDocument();
+
+    // Second click actually ignores
+    await user.click(screen.getByRole("button", { name: /忽略/ }));
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("queue-card-contract-clause")).not.toBeInTheDocument();
+    });
+  });
+
+  it("Esc cancels high-risk ignore after first click", async () => {
+    const user = userEvent.setup();
+
+    renderWithI18n(<CommandCenter snapshot={getDashboardSnapshot()} />);
+
+    await screen.findByRole("button", { name: /Y.*确认方案/ });
+
+    const ignoreBtn = screen.getByRole("button", { name: /忽略/ });
+    await user.click(ignoreBtn);
+
+    await waitFor(() => {
+      expect(screen.getByText(/再按一次/)).toBeInTheDocument();
+    });
+
+    // Esc should cancel
+    fireEvent.keyDown(window, { key: "Escape" });
+
+    await waitFor(() => {
+      expect(screen.queryByText(/再按一次/)).not.toBeInTheDocument();
+    });
+
+    // Item still present
+    expect(screen.getByTestId("queue-card-contract-clause")).toBeInTheDocument();
+  });
+
+  // ── Snooze ───────────────────────────────────────────────────────────────────
+
+  it("S key snoozes the selected item and moves selection to next", async () => {
+    renderWithI18n(<CommandCenter snapshot={getDashboardSnapshot()} />);
+
+    await screen.findByRole("button", { name: /Y.*确认方案/ });
+
+    fireEvent.keyDown(window, { key: "s" });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("queue-card-review-owner")).toHaveAttribute("aria-pressed", "true");
+    });
+
+    // Snoozed item shows the ⏸ badge
+    expect(screen.getByTestId("queue-card-contract-clause").textContent).toContain("⏸");
+  });
+
+  it("pressing S again on a snoozed item un-snoozes it", async () => {
+    renderWithI18n(<CommandCenter snapshot={getDashboardSnapshot()} />);
+
+    await screen.findByRole("button", { name: /Y.*确认方案/ });
+
+    // Snooze
+    fireEvent.keyDown(window, { key: "s" });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("queue-card-contract-clause").textContent).toContain("⏸");
+    });
+
+    // Select snoozed item
+    fireEvent.click(screen.getByTestId("queue-card-contract-clause"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("queue-card-contract-clause")).toHaveAttribute("aria-pressed", "true");
+    });
+
+    // Un-snooze
+    fireEvent.keyDown(window, { key: "s" });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("queue-card-contract-clause").textContent).not.toContain("⏸");
+    });
+  });
+
+  // ── localStorage persistence ──────────────────────────────────────────────────
+
+  it("restores snoozed items from localStorage on mount", async () => {
+    localStorage.setItem("slackoff_snoozed", JSON.stringify(["contract-clause"]));
+
+    renderWithI18n(<CommandCenter snapshot={getDashboardSnapshot()} />);
+
+    await screen.findByTestId("queue-card-contract-clause");
+
+    // Badge should be visible immediately without user interaction
+    expect(screen.getByTestId("queue-card-contract-clause").textContent).toContain("⏸");
+
+    localStorage.removeItem("slackoff_snoozed");
+  });
+
+  it("persists focus filter state to localStorage", async () => {
+    localStorage.setItem("slackoff_focus_only", "true");
+
+    renderWithI18n(<CommandCenter snapshot={getDashboardSnapshot()} />);
+
+    await screen.findByTestId("queue-card-contract-clause");
+
+    // P2 item should be hidden when focus filter is on
+    expect(screen.queryByTestId("queue-card-budget-reminder")).not.toBeInTheDocument();
+
+    localStorage.removeItem("slackoff_focus_only");
   });
 });

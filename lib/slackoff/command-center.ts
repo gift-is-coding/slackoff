@@ -92,21 +92,22 @@ export function filterWorkItems(
  * subsequent items from the same channel increment its groupCount.
  */
 export function groupByChannel(items: WorkItem[]): GroupedWorkItem[] {
-  const channelFirst = new Map<string, GroupedWorkItem>();
-  const result: GroupedWorkItem[] = [];
+  const channelCount = new Map<string, number>();
+  const channelFirst = new Map<string, WorkItem>();
 
   for (const item of items) {
-    const existing = channelFirst.get(item.channel);
-    if (existing) {
-      existing.groupCount++;
+    if (!channelFirst.has(item.channel)) {
+      channelFirst.set(item.channel, item);
+      channelCount.set(item.channel, 1);
     } else {
-      const grouped: GroupedWorkItem = { ...item, groupCount: 1 };
-      channelFirst.set(item.channel, grouped);
-      result.push(grouped);
+      channelCount.set(item.channel, (channelCount.get(item.channel) ?? 1) + 1);
     }
   }
 
-  return result;
+  return Array.from(channelFirst.values()).map((item) => ({
+    ...item,
+    groupCount: channelCount.get(item.channel) ?? 1,
+  }));
 }
 
 export function getAdjacentItemId(

@@ -166,10 +166,11 @@ export function CommandCenter({ snapshot }: CommandCenterProps) {
     t("bridgeNoDecision"),
   );
   const [decisionReply, setDecisionReply] = useState<string | null>(null);
-  const [isBridgeSubmitting, setIsBridgeSubmitting] = useState(false);
+  const [submittingItemIds, setSubmittingItemIds] = useState<Set<string>>(new Set());
 
   // Undo window: 5-second countdown after approve_plan / confirm_execute
-  const [undoWindow, setUndoWindow] = useState<{ itemId: string; targetStep: ItemStep } | null>(null);
+  // expiresAt is a timestamp (Date.now() + 5000) to avoid drift from re-renders
+  const [undoWindow, setUndoWindow] = useState<{ itemId: string; targetStep: ItemStep; expiresAt: number } | null>(null);
   const [undoSecondsLeft, setUndoSecondsLeft] = useState(0);
 
   // High-risk ignore: requires a second I press to confirm
@@ -204,6 +205,8 @@ export function CommandCenter({ snapshot }: CommandCenterProps) {
     ? (commandDrafts.get(selectedItem.id) ?? DEFAULT_DRAFT)
     : DEFAULT_DRAFT;
   const isProcessedTab = activeTab === "processed";
+  // Per-item submitting flag — only blocks the item currently being submitted
+  const isBridgeSubmitting = selectedItem ? submittingItemIds.has(selectedItem.id) : false;
 
   const currentStep = selectedItem
     ? getItemStep(itemSteps, selectedItem.id)
@@ -267,24 +270,27 @@ export function CommandCenter({ snapshot }: CommandCenterProps) {
     } catch { /* storage unavailable */ }
   }, [snoozedIds]);
 
-  // Count down the undo window; advance step when it reaches zero
+  // Count down the undo window using a timestamp-based approach to avoid drift.
   useEffect(() => {
     if (!undoWindow) return;
 
-    if (undoSecondsLeft <= 0) {
-      advanceStep(undoWindow.itemId, undoWindow.targetStep);
-      setUndoWindow(null);
-      return;
-    }
+    const tick = () => {
+      const remaining = Math.ceil((undoWindow.expiresAt - Date.now()) / 1000);
+      if (remaining <= 0) {
+        advanceStep(undoWindow.itemId, undoWindow.targetStep);
+        setUndoWindow(null);
+        setUndoSecondsLeft(0);
+        return;
+      }
+      setUndoSecondsLeft(remaining);
+      timerId = window.setTimeout(tick, 200);
+    };
 
-    const timerId = window.setTimeout(() => {
-      setUndoSecondsLeft((s) => s - 1);
-    }, 1000);
-
+    let timerId = window.setTimeout(tick, 0);
     return () => window.clearTimeout(timerId);
     // advanceStep reads selectedItemId via closure — stable across re-renders for our purposes
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [undoWindow, undoSecondsLeft]);
+  }, [undoWindow]);
 
   const switchTab = useCallback(
     (tab: InboxTab) => {
@@ -518,7 +524,8 @@ export function CommandCenter({ snapshot }: CommandCenterProps) {
       return false;
     }
 
-    setIsBridgeSubmitting(true);
+    const submittingId = selectedItem.id;
+    setSubmittingItemIds((prev) => new Set(prev).add(submittingId));
     setBridgeNotice(t("bridgeSyncing"));
     setDecisionReply(null);
 
@@ -591,7 +598,11 @@ export function CommandCenter({ snapshot }: CommandCenterProps) {
       setDecisionReply(null);
       return false;
     } finally {
-      setIsBridgeSubmitting(false);
+      setSubmittingItemIds((prev) => {
+        const next = new Set(prev);
+        next.delete(submittingId);
+        return next;
+      });
     }
   }
 
@@ -603,7 +614,7 @@ export function CommandCenter({ snapshot }: CommandCenterProps) {
     });
 
     if (succeeded && targetItem) {
-      setUndoWindow({ itemId: targetItem.id, targetStep: "step2" });
+      setUndoWindow({ itemId: targetItem.id, targetStep: "step2", expiresAt: Date.now() + 5000 });
       setUndoSecondsLeft(5);
     }
   }
@@ -612,26 +623,25 @@ export function CommandCenter({ snapshot }: CommandCenterProps) {
     if (!undoWindow || !selectedItem) return;
 
     const itemId = undoWindow.itemId;
+    const { source, summary } = selectedItem;
     setUndoWindow(null);
     setUndoSecondsLeft(0);
 
     // Revert status server-side
-    fetch("/api/openclaw/decision", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        action: "cancel",
-        itemId,
-        source: selectedItem.source,
-        summary: selectedItem.summary,
-      }),
-    })
-      .then(() => refreshItems())
-      .catch((err: unknown) => {
-        console.error("[CommandCenter] Undo cancel request failed:", err);
+    try {
+      await fetch("/api/openclaw/decision", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "cancel", itemId, source, summary }),
       });
-
-    setBridgeNotice(t("undoCancelled"));
+      await refreshItems();
+      setBridgeNotice(t("undoCancelled"));
+    } catch (err: unknown) {
+      console.error("[CommandCenter] Undo cancel request failed:", err);
+      setBridgeNotice(
+        err instanceof Error ? err.message : t("bridgeSyncFail"),
+      );
+    }
     setDecisionReply(null);
   }
 
@@ -685,18 +695,27 @@ export function CommandCenter({ snapshot }: CommandCenterProps) {
   function handleSnooze() {
     if (!selectedItem) return;
     const id = selectedItem.id;
-    setSnoozedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id); // un-snooze
-      } else {
+    const isCurrentlySnoozed = snoozedIds.has(id);
+
+    if (isCurrentlySnoozed) {
+      setSnoozedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    } else {
+      // Move selection to next non-snoozed item before snoozing
+      const nextId = visibleItems.find(
+        (item) => item.id !== id && !snoozedIds.has(item.id),
+      )?.id;
+      if (nextId) setSelectedItemId(nextId);
+
+      setSnoozedIds((prev) => {
+        const next = new Set(prev);
         next.add(id);
-        // Move selection to next non-snoozed item
-        const nextId = visibleItems.find((item) => item.id !== id && !next.has(item.id))?.id;
-        if (nextId) setSelectedItemId(nextId);
-      }
-      return next;
-    });
+        return next;
+      });
+    }
   }
 
   async function handleConfirmExecute() {
@@ -707,7 +726,7 @@ export function CommandCenter({ snapshot }: CommandCenterProps) {
     });
 
     if (succeeded && targetItem) {
-      setUndoWindow({ itemId: targetItem.id, targetStep: "step3" });
+      setUndoWindow({ itemId: targetItem.id, targetStep: "step3", expiresAt: Date.now() + 5000 });
       setUndoSecondsLeft(5);
     }
   }
