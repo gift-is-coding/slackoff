@@ -132,6 +132,7 @@ export type OpenClawDecisionBridgeResult = {
 
 export type OpenClawDecisionChannelResult = {
   ok: boolean;
+  pending?: boolean;
   replyText: string | null;
   sessionId: string;
   durationMs: number | null;

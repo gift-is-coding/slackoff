@@ -289,7 +289,8 @@ export async function submitDecisionToOpenClaw(
       errorMessage: bridgeErrorMessage,
     },
     channel: {
-      ok: true,
+      ok: false,
+      pending: true,
       replyText: null,
       sessionId: SLACKOFF_DECISION_SESSION_ID,
       durationMs: null,

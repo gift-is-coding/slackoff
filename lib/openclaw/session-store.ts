@@ -84,7 +84,13 @@ export async function readSessionTranscript(params: {
   const lines = transcript
     .trim()
     .split("\n")
-    .map((line) => JSON.parse(line) as TranscriptMessageLine)
+    .flatMap((line) => {
+      try {
+        return [JSON.parse(line) as TranscriptMessageLine];
+      } catch {
+        return [];
+      }
+    })
     .filter((line) => line.type === "message")
     .map((line) => ({
       timestamp: line.timestamp || "",

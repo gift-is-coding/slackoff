@@ -46,10 +46,10 @@ type CommandCenterWorkspaceProps = {
 
 const getKeyboardShortcuts = (t: (key: string) => string) => [
   { key: "W / ↑", description: t("scUp") },
-  { key: "↓", description: t("scDown") },
+  { key: "S / ↓", description: t("scDown") },
   { key: "Y / Enter", description: t("scConfirm") },
   { key: "I", description: t("scIgnore") },
-  { key: "S", description: t("scSnooze") },
+  { key: "L", description: t("scSnooze") },
   { key: "Z", description: t("scUndo") },
   { key: "/ :", description: t("scCommand") },
   { key: "F", description: t("scFocus") },
@@ -373,6 +373,20 @@ function ProcessedItemSummary({ selectedItem }: { selectedItem: WorkItem }) {
         <article className="card">
           <h3>{`// ${t("srcAiSuggestion")}`}</h3>
           <p className="draft-text">{selectedItem.aiDraft}</p>
+        </article>
+      ) : null}
+
+      {selectedItem.recommendedAction ? (
+        <article className="card">
+          <h3>{`// ${t("srcRecommendedAction")}`}</h3>
+          <p className="source-message">{selectedItem.recommendedAction}</p>
+        </article>
+      ) : null}
+
+      {selectedItem.explanation ? (
+        <article className="card">
+          <h3>{`// ${t("srcExplanation")}`}</h3>
+          <p className="source-message">{selectedItem.explanation}</p>
         </article>
       ) : null}
     </div>

@@ -7,8 +7,7 @@ export type NotificationStatus =
   | "dismissed"
   | "ignored"
   | "approved"
-  | "executed"
-  | string;
+  | "executed";
 
 export type NotificationItem = {
   id: string;
@@ -97,11 +96,23 @@ export async function readProcessedNotifications(): Promise<NotificationItem[]> 
     });
 }
 
+let writeLock: Promise<unknown> = Promise.resolve();
+
 /**
  * Update the status of a notification item in the inbox JSON file.
  * Returns true if the item was found and updated.
+ * Serialised via a promise lock to prevent concurrent read-modify-write races.
  */
 export async function writeNotificationStatus(
+  itemId: string,
+  newStatus: NotificationStatus,
+): Promise<boolean> {
+  const op = writeLock.then(() => doWriteNotificationStatus(itemId, newStatus));
+  writeLock = op.catch(() => {});
+  return op;
+}
+
+async function doWriteNotificationStatus(
   itemId: string,
   newStatus: NotificationStatus,
 ): Promise<boolean> {
@@ -121,10 +132,16 @@ export async function writeNotificationStatus(
       return false;
     }
 
-    target.status = newStatus;
-    target.updated_at = new Date().toISOString();
+    const updated: NotificationInbox = {
+      ...parsed,
+      items: parsed.items.map((item) =>
+        item.id === itemId
+          ? { ...item, status: newStatus, updated_at: new Date().toISOString() }
+          : item,
+      ),
+    };
 
-    await writeFile(filePath, JSON.stringify(parsed, null, 2), "utf8");
+    await writeFile(filePath, JSON.stringify(updated, null, 2), "utf8");
 
     return true;
   } catch {

@@ -71,17 +71,33 @@ export async function readLatestOutboxEnvelope() {
     return null;
   }
 
-  const ranked = await Promise.all(
-    files.map(async (filePath) => ({
-      filePath,
-      mtimeMs: (await stat(filePath)).mtimeMs,
-    })),
+  const rankedMaybes = await Promise.all(
+    files.map(async (filePath) => {
+      try {
+        return { filePath, mtimeMs: (await stat(filePath)).mtimeMs };
+      } catch {
+        return null;
+      }
+    }),
   );
+  const ranked = rankedMaybes.filter((entry): entry is NonNullable<typeof entry> => entry !== null);
+
+  if (ranked.length === 0) {
+    return null;
+  }
+
   const latest = ranked.sort((left, right) => right.mtimeMs - left.mtimeMs)[0];
   const content = await readFile(latest.filePath, "utf8");
 
+  let payload: Record<string, unknown>;
+  try {
+    payload = JSON.parse(content) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+
   return {
     filePath: latest.filePath,
-    payload: JSON.parse(content) as Record<string, unknown>,
+    payload,
   };
 }

@@ -26,6 +26,8 @@ export const dict = {
     srcExecPreview: "执行预览",
     srcExecResult: "执行结果",
     srcProcessed: "已处理",
+    srcRecommendedAction: "建议操作",
+    srcExplanation: "说明",
 
     slashDirectReply: "直接回复",
     slashAiInstruction: "AI 指令",
@@ -56,6 +58,7 @@ export const dict = {
     bridgeSyncFail: "OpenClaw 审批动作同步失败",
     channelConfirmed: "OpenClaw 已确认该审批动作。",
     channelNoConfirm: "OpenClaw channel 未返回确认消息。",
+    channelPending: "已提交（异步处理中）",
 
     undoCountdown: "秒后继续，按 [Z] 撤销",
     undoBtn: "[Z] 撤销",
@@ -63,13 +66,33 @@ export const dict = {
 
     highRiskIgnoreWarning: "⚠ 风险较高 — 再按一次 [I] 确认忽略，或按 [Esc] 取消",
 
-    snoozeBtn: "[S] 稍后",
+    snoozeBtn: "[L] 稍后",
     snoozed: "已缓",
     scSnooze: "缓处理",
     scUndo: "撤销",
     statusPending: "待处理",
     statusFocus: "P0/P1",
     statusProcessed: "已处理",
+
+    loadingNotifications: "加载通知中 ...",
+    noProcessedItems: "暂无已处理条目",
+    noPendingItems: "暂无待处理条目",
+    processedHint: "处理过的消息会出现在这里。",
+    waitingSync: "等待 openclaw 同步新通知。",
+    noMatches: "无匹配结果",
+    clearFilterHint: "清除过滤条件以查看全部条目。",
+    clearFilter: "[清除]",
+
+    riskLow: "低",
+    riskMedium: "中",
+    riskHigh: "高",
+    timeJustNow: "刚刚",
+    timeMinutesAgo: "{n} 分钟前",
+    timeHoursAgo: "{n} 小时前",
+    timeDaysAgo: "{n} 天前",
+    pendingConfirm: "待确认",
+    sourcePrefix: "来源: ",
+    screenshotCaption: "预执行画面 (Screenshot ahead of execution)",
 
     switchLang: "English",
   },
@@ -98,6 +121,8 @@ export const dict = {
     srcExecPreview: "Execution Preview",
     srcExecResult: "Execution Result",
     srcProcessed: "Processed",
+    srcRecommendedAction: "Recommended Action",
+    srcExplanation: "Explanation",
 
     slashDirectReply: "Direct reply",
     slashAiInstruction: "AI Command",
@@ -128,6 +153,7 @@ export const dict = {
     bridgeSyncFail: "Failed to sync decision to OpenClaw",
     channelConfirmed: "OpenClaw confirmed the decision.",
     channelNoConfirm: "OpenClaw channel did not return a confirmation.",
+    channelPending: "Submitted (async processing)",
 
     undoCountdown: "s to proceed — press [Z] to undo",
     undoBtn: "[Z] Undo",
@@ -135,13 +161,33 @@ export const dict = {
 
     highRiskIgnoreWarning: "⚠ High risk — press [I] again to confirm ignore, or [Esc] to cancel",
 
-    snoozeBtn: "[S] Snooze",
+    snoozeBtn: "[L] Snooze",
     snoozed: "snoozed",
     scSnooze: "Snooze",
     scUndo: "Undo",
     statusPending: "pending",
     statusFocus: "P0/P1",
     statusProcessed: "processed",
+
+    loadingNotifications: "loading notifications ...",
+    noProcessedItems: "no processed items",
+    noPendingItems: "no pending items",
+    processedHint: "Processed messages will appear here.",
+    waitingSync: "waiting for openclaw to sync new notifications.",
+    noMatches: "no matches",
+    clearFilterHint: "clear filter to see all items.",
+    clearFilter: "[clear]",
+
+    riskLow: "Low",
+    riskMedium: "Medium",
+    riskHigh: "High",
+    timeJustNow: "just now",
+    timeMinutesAgo: "{n}m ago",
+    timeHoursAgo: "{n}h ago",
+    timeDaysAgo: "{n}d ago",
+    pendingConfirm: "Pending",
+    sourcePrefix: "Source: ",
+    screenshotCaption: "Screenshot ahead of execution",
 
     switchLang: "中文",
   },

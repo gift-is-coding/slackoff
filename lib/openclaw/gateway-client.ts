@@ -1,5 +1,7 @@
 import WebSocket from "ws";
 import { readLocalGatewayConfig } from "@/lib/openclaw/config";
+import type { Lang } from "@/lib/i18n/dict";
+import { formatTimeLabel } from "@/lib/slackoff/work-item-mapper";
 import type {
   AllowedOpenClawRpcMethod,
   GatewayChannelBrief,
@@ -61,26 +63,10 @@ function resolveScopesForMethod(
   }
 }
 
-function formatAgeLabel(ageMs?: number): string {
-  if (!ageMs || ageMs < 60_000) {
-    return "刚刚";
-  }
-
-  if (ageMs < 3_600_000) {
-    return `${Math.round(ageMs / 60_000)} 分钟前`;
-  }
-
-  if (ageMs < 86_400_000) {
-    return `${Math.round(ageMs / 3_600_000)} 小时前`;
-  }
-
-  return `${Math.round(ageMs / 86_400_000)} 天前`;
-}
-
-function toRecentSessions(payload: GatewayHealthPayload): GatewayRecentSession[] {
+function toRecentSessions(payload: GatewayHealthPayload, lang: Lang): GatewayRecentSession[] {
   return (payload.sessions?.recent ?? []).slice(0, 4).map((session) => ({
     key: session.key || "unknown",
-    ageLabel: formatAgeLabel(session.age),
+    ageLabel: formatTimeLabel(new Date(Date.now() - (session.age ?? 0)).toISOString(), lang),
   }));
 }
 
@@ -170,7 +156,12 @@ export async function callGateway<TPayload>({
     });
 
     ws.on("message", (raw: WebSocket.RawData) => {
-      const message = JSON.parse(String(raw)) as ResponseFrame<TPayload>;
+      let message: ResponseFrame<TPayload>;
+      try {
+        message = JSON.parse(String(raw)) as ResponseFrame<TPayload>;
+      } catch {
+        return;
+      }
 
       if (message.type !== "res") {
         return;
@@ -221,7 +212,7 @@ export async function callGateway<TPayload>({
   });
 }
 
-export async function getOpenClawHealth(): Promise<OpenClawGatewayHealth> {
+export async function getOpenClawHealth(lang: Lang = "zh"): Promise<OpenClawGatewayHealth> {
   try {
     const gateway = await readLocalGatewayConfig();
     const payload = await callGateway<GatewayHealthPayload>({ method: "health" });
@@ -250,7 +241,7 @@ export async function getOpenClawHealth(): Promise<OpenClawGatewayHealth> {
       configuredChannelCount,
       activeChannelCount,
       channels,
-      recentSessions: toRecentSessions(payload),
+      recentSessions: toRecentSessions(payload, lang),
     };
   } catch (error) {
     return {

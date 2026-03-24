@@ -1,3 +1,4 @@
+import { dict, type Lang } from "@/lib/i18n/dict";
 import type { NotificationItem } from "@/lib/openclaw/notification-inbox";
 import type { Priority, Risk, WorkItem } from "@/lib/slackoff/types";
 
@@ -49,11 +50,13 @@ function inferRisk(_item: NotificationItem): Risk {
   return "low";
 }
 
-const RISK_LABELS: Record<Risk, string> = {
-  low: "低",
-  medium: "中",
-  high: "高",
-};
+function getRiskLabels(lang: Lang): Record<Risk, string> {
+  return {
+    low: dict[lang].riskLow,
+    medium: dict[lang].riskMedium,
+    high: dict[lang].riskHigh,
+  };
+}
 
 function truncate(text: string, maxLength: number): string {
   if (text.length <= maxLength) {
@@ -63,33 +66,37 @@ function truncate(text: string, maxLength: number): string {
   return `${text.slice(0, maxLength)}...`;
 }
 
-function formatTimeLabel(time: string): string {
+export function formatTimeLabel(time: string, lang: Lang = "zh"): string {
   if (!time) {
     return "--";
   }
 
   try {
     const date = new Date(time.replace(" ", "T"));
+    if (Number.isNaN(date.getTime())) {
+      return time;
+    }
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
+    const d = dict[lang];
 
     if (diffMs < 60_000) {
-      return "刚刚";
+      return d.timeJustNow;
     }
     if (diffMs < 3_600_000) {
-      return `${Math.round(diffMs / 60_000)} 分钟前`;
+      return d.timeMinutesAgo.replace("{n}", String(Math.round(diffMs / 60_000)));
     }
     if (diffMs < 86_400_000) {
-      return `${Math.round(diffMs / 3_600_000)} 小时前`;
+      return d.timeHoursAgo.replace("{n}", String(Math.round(diffMs / 3_600_000)));
     }
 
-    return `${Math.round(diffMs / 86_400_000)} 天前`;
+    return d.timeDaysAgo.replace("{n}", String(Math.round(diffMs / 86_400_000)));
   } catch {
     return time;
   }
 }
 
-export function mapNotificationToWorkItem(item: NotificationItem): WorkItem {
+export function mapNotificationToWorkItem(item: NotificationItem, lang: Lang = "zh"): WorkItem {
   const sourceLabel = extractSourceLabel(item.app);
   const priority: Priority = VALID_PRIORITIES.has(item.priority ?? "")
     ? (item.priority as Priority)
@@ -97,6 +104,7 @@ export function mapNotificationToWorkItem(item: NotificationItem): WorkItem {
   const risk: Risk = VALID_RISKS.has(item.risk ?? "")
     ? (item.risk as Risk)
     : inferRisk(item);
+  const d = dict[lang];
 
   return {
     id: item.id,
@@ -105,21 +113,21 @@ export function mapNotificationToWorkItem(item: NotificationItem): WorkItem {
     source: sourceLabel,
     owner: item.owner?.trim() || sourceLabel,
     summary: truncate(item.content, 80),
-    deadline: formatTimeLabel(item.time),
+    deadline: formatTimeLabel(item.time, lang),
     risk,
-    riskLabel: RISK_LABELS[risk],
-    recommendedAction: item.recommended_action?.trim() || "待确认",
+    riskLabel: getRiskLabels(lang)[risk],
+    recommendedAction: item.recommended_action?.trim() || d.pendingConfirm,
     explanation: item.explanation?.trim() ?? "",
     sourceMessage: item.content,
     aiDraft: item.ai_reply?.trim() ?? "",
-    finalRecipients: item.final_recipients?.trim() || `来源: ${sourceLabel}`,
+    finalRecipients: item.final_recipients?.trim() || `${d.sourcePrefix}${sourceLabel}`,
     previewDraft: item.execution_plan ?? "",
     previewNote: item.preview_note?.trim() ?? "",
-    screenshotCaption: item.screenshot_url ? "预执行画面 (Screenshot ahead of execution)" : "",
+    screenshotCaption: item.screenshot_url ? d.screenshotCaption : "",
     screenshotUrl: item.screenshot_url,
   };
 }
 
-export function mapNotificationsToWorkItems(items: NotificationItem[]): WorkItem[] {
-  return items.map(mapNotificationToWorkItem);
+export function mapNotificationsToWorkItems(items: NotificationItem[], lang: Lang = "zh"): WorkItem[] {
+  return items.map((item) => mapNotificationToWorkItem(item, lang));
 }

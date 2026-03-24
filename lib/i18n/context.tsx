@@ -24,6 +24,10 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
     setMounted(true);
   }, []);
 
+  useEffect(() => {
+    document.documentElement.lang = lang;
+  }, [lang]);
+
   const toggleLang = () => {
     setLang((prev) => {
       const next = prev === "zh" ? "en" : "zh";

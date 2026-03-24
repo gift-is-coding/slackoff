@@ -126,7 +126,7 @@ function setItemStepImmutable(
 }
 
 export function CommandCenter({ snapshot }: CommandCenterProps) {
-  const { t, toggleLang } = useTranslation();
+  const { t, toggleLang, lang } = useTranslation();
   const [activeTab, setActiveTab] = useState<InboxTab>("pending");
   const [items, setItems] = useState<WorkItem[]>(snapshot.items);
   const [processedItems, setProcessedItems] = useState<WorkItem[]>([]);
@@ -270,6 +270,16 @@ export function CommandCenter({ snapshot }: CommandCenterProps) {
     } catch { /* storage unavailable */ }
   }, [snoozedIds]);
 
+  const advanceStep = useEffectEvent((itemId: string, nextStep: ItemStep) => {
+    setItemSteps((current) => {
+      const isViewingThisItem = selectedItemId === itemId;
+      return setItemStepImmutable(current, itemId, {
+        step: nextStep,
+        hasNotification: !isViewingThisItem,
+      });
+    });
+  });
+
   // Count down the undo window using a timestamp-based approach to avoid drift.
   useEffect(() => {
     if (!undoWindow) return;
@@ -288,9 +298,7 @@ export function CommandCenter({ snapshot }: CommandCenterProps) {
 
     let timerId = window.setTimeout(tick, 0);
     return () => window.clearTimeout(timerId);
-    // advanceStep reads selectedItemId via closure — stable across re-renders for our purposes
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [undoWindow]);
+  }, [undoWindow, advanceStep]);
 
   const switchTab = useCallback(
     (tab: InboxTab) => {
@@ -309,7 +317,7 @@ export function CommandCenter({ snapshot }: CommandCenterProps) {
 
     async function loadIntegrationState() {
       const [healthResult, bridgeResult] = await Promise.allSettled([
-        fetch("/api/openclaw/health", {
+        fetch(`/api/openclaw/health?lang=${lang}`, {
           cache: "no-store",
           signal: controller.signal,
         }),
@@ -365,7 +373,7 @@ export function CommandCenter({ snapshot }: CommandCenterProps) {
     void loadIntegrationState();
 
     return () => controller.abort();
-  }, []);
+  }, [lang]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -373,11 +381,11 @@ export function CommandCenter({ snapshot }: CommandCenterProps) {
     async function loadItems() {
       try {
         const [pendingRes, processedRes] = await Promise.all([
-          fetch("/api/openclaw/items", {
+          fetch(`/api/openclaw/items?lang=${lang}`, {
             cache: "no-store",
             signal: controller.signal,
           }),
-          fetch("/api/openclaw/items?tab=processed", {
+          fetch(`/api/openclaw/items?tab=processed&lang=${lang}`, {
             cache: "no-store",
             signal: controller.signal,
           }),
@@ -412,13 +420,13 @@ export function CommandCenter({ snapshot }: CommandCenterProps) {
       controller.abort();
       window.clearInterval(intervalId);
     };
-  }, []);
+  }, [lang]);
 
   async function refreshItems() {
     try {
       const [pendingRes, processedRes] = await Promise.all([
-        fetch("/api/openclaw/items", { cache: "no-store" }),
-        fetch("/api/openclaw/items?tab=processed", { cache: "no-store" }),
+        fetch(`/api/openclaw/items?lang=${lang}`, { cache: "no-store" }),
+        fetch(`/api/openclaw/items?tab=processed&lang=${lang}`, { cache: "no-store" }),
       ]);
 
       const pendingPayload = await readJsonPayload(pendingRes);
@@ -448,16 +456,6 @@ export function CommandCenter({ snapshot }: CommandCenterProps) {
     }
 
     setBridge(bridgePayload);
-  }
-
-  function advanceStep(itemId: string, nextStep: ItemStep) {
-    setItemSteps((current) => {
-      const isViewingThisItem = selectedItemId === itemId;
-      return setItemStepImmutable(current, itemId, {
-        step: nextStep,
-        hasNotification: !isViewingThisItem,
-      });
-    });
   }
 
   function handleCommandDraftChange(value: string) {
@@ -578,6 +576,8 @@ export function CommandCenter({ snapshot }: CommandCenterProps) {
         setDecisionReply(
           payload.channel.replyText || t("channelConfirmed"),
         );
+      } else if (payload.channel.pending) {
+        setDecisionReply(t("channelPending"));
       } else {
         setDecisionReply(
           payload.channel.errorMessage || t("channelNoConfirm"),
@@ -620,10 +620,12 @@ export function CommandCenter({ snapshot }: CommandCenterProps) {
   }
 
   async function handleUndo() {
-    if (!undoWindow || !selectedItem) return;
+    if (!undoWindow) return;
 
     const itemId = undoWindow.itemId;
-    const { source, summary } = selectedItem;
+    const undoneItem = items.find((item) => item.id === itemId);
+    const source = undoneItem?.source ?? "";
+    const summary = undoneItem?.summary ?? "";
     setUndoWindow(null);
     setUndoSecondsLeft(0);
 
@@ -835,7 +837,7 @@ export function CommandCenter({ snapshot }: CommandCenterProps) {
       return;
     }
 
-    if (event.key === "ArrowDown") {
+    if (event.key === "ArrowDown" || event.key.toLowerCase() === "s") {
       event.preventDefault();
       const nextId = getAdjacentItemId(groupedVisibleItems, selectedItemId, 1);
       if (nextId) {
@@ -854,7 +856,7 @@ export function CommandCenter({ snapshot }: CommandCenterProps) {
       return;
     }
 
-    if (event.key.toLowerCase() === "s") {
+    if (event.key.toLowerCase() === "l") {
       event.preventDefault();
       handleSnooze();
       return;
@@ -1006,23 +1008,23 @@ export function CommandCenter({ snapshot }: CommandCenterProps) {
             </ul>
           ) : itemsLoading ? (
             <div className="queue-empty">
-              <strong>loading notifications ...</strong>
+              <strong>{t("loadingNotifications")}</strong>
             </div>
           ) : sourceItems.length === 0 ? (
             <div className="queue-empty">
               <strong>
-                {isProcessedTab ? "no processed items" : "no pending items"}
+                {isProcessedTab ? t("noProcessedItems") : t("noPendingItems")}
               </strong>
               <p>
                 {isProcessedTab
-                  ? "处理过的消息会出现在这里。"
-                  : "waiting for openclaw to sync new notifications."}
+                  ? t("processedHint")
+                  : t("waitingSync")}
               </p>
             </div>
           ) : (
             <div className="queue-empty">
-              <strong>no matches</strong>
-              <p>clear filter to see all items.</p>
+              <strong>{t("noMatches")}</strong>
+              <p>{t("clearFilterHint")}</p>
               <button
                 className="footer-button"
                 onClick={() => {
@@ -1031,7 +1033,7 @@ export function CommandCenter({ snapshot }: CommandCenterProps) {
                 }}
                 type="button"
               >
-                [clear]
+                {t("clearFilter")}
               </button>
             </div>
           )}
